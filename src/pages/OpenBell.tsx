@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { callClaude } from "../components/APIClient";
+import { callLLM } from "../components/APIClient";
 import { SAMPLE_BRIEF } from "../lib/sampleData";
+import { getTodayBrief, saveBrief } from "../lib/api";
+import { OPEN_BELL_PROMPT } from "../lib/prompts";
 import type { BriefData, PriorityEvent, OnSale, SocialSignal } from "../lib/types";
 import {
   AlertTriangle,
@@ -256,6 +258,12 @@ const labelStyle: React.CSSProperties = {
 export default function OpenBell() {
   const [brief, setBrief] = useState<BriefData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getTodayBrief()
+      .then(data => { if (data) setBrief(data); })
+      .catch(() => {});
+  }, []);
   const [activeTab, setActiveTab] = useState<"brief" | "events" | "signals">(
     "brief"
   );
@@ -298,43 +306,22 @@ export default function OpenBell() {
   const generateBrief = useCallback(async () => {
     setLoading(true);
     try {
-      const prompt = `You are a ticket resale market analyst for the Denver, Colorado market. Generate a morning trading intelligence brief for today. Return ONLY valid JSON matching this TypeScript interface — no markdown, no explanation:
-
-interface BriefData {
-  market_summary: string; // 2-3 sentence Denver secondary ticket market overview
-  priority_events: Array<{
-    event_name: string;
-    event_date: string; // e.g. "Apr 22, 2026"
-    venue: string; // Denver area venues
-    category: "concert" | "sports" | "theater";
-    signal: "price_spike" | "price_drop" | "high_demand" | "low_supply" | "on_sale_today";
-    action: "BUY" | "SELL" | "HOLD" | "WATCH";
-    confidence: number; // 0-100
-    reasoning: string; // 1-2 sentences
-    estimated_roi_pct: number;
-  }>;
-  on_sales_today: Array<{
-    event_name: string;
-    time: string; // e.g. "10:00 AM MT"
-    platform: string;
-    profit_potential: "high" | "medium" | "low";
-    notes: string;
-  }>;
-  social_signals: Array<{
-    source: string;
-    signal: string;
-    impact: "high" | "medium" | "low";
-    affected_events: string[];
-  }>;
-  risk_alerts: string[];
-  recommended_focus: string;
-}
-
-Include 5-7 priority events, 2-3 on-sales, 3-4 social signals, 1-2 risk alerts, and a specific recommended focus for today. Use real Denver venues (Ball Arena, Red Rocks, Empower Field, Coors Field, Denver Center). Make it actionable for a ticket reseller.`;
-
-      const raw = await callClaude(prompt, true);
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const prompt = OPEN_BELL_PROMPT.buildPrompt({ date, searchResults: "${searchResults}" });
+      const raw = await callLLM({
+        prompt,
+        modelTier: OPEN_BELL_PROMPT.model,
+        maxTokens: OPEN_BELL_PROMPT.maxTokens,
+        searchQueries: OPEN_BELL_PROMPT.searchQueries,
+      });
       const parsed: BriefData = JSON.parse(raw);
       setBrief(parsed);
+      saveBrief(parsed).catch(() => {});
     } catch {
       setBrief(SAMPLE_BRIEF);
     } finally {

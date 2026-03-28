@@ -11,7 +11,9 @@ import {
   Menu,
   X,
   Home,
+  LogOut,
 } from 'lucide-react';
+import { useAuth } from '../lib/auth';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: Home },
@@ -27,6 +29,7 @@ const NAV_ITEMS = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
@@ -80,8 +83,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="px-4 py-3 border-t text-xs" style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}>
-          v0.1 Beta
+        <div className="px-4 py-3 border-t text-xs space-y-2" style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}>
+          {user && (
+            <div className="flex items-center justify-between">
+              <span className="truncate max-w-[120px]">{user.email}</span>
+              <button type="button" onClick={signOut} title="Sign out">
+                <LogOut size={14} style={{ color: 'var(--text-muted)' }} />
+              </button>
+            </div>
+          )}
+          <div>v0.1 Beta</div>
         </div>
       </aside>
 

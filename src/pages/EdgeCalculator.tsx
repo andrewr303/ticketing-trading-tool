@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Calculator, Loader2, TrendingUp, TrendingDown, AlertTriangle, Target, Clock, DollarSign, BarChart3, ShieldAlert, ArrowRight } from 'lucide-react';
-import { callClaude } from '../components/APIClient';
+import { callLLM } from '../components/APIClient';
+import { EDGE_CALC_PROMPT } from '../lib/prompts';
 import type { Analysis, AnalysisInput } from '../lib/types';
 
 const SAMPLE_ANALYSIS: Analysis = {
@@ -77,16 +78,35 @@ export default function EdgeCalculator() {
     if (!form.event || !form.buyPrice) return;
     setLoading(true);
     try {
-      const prompt = `You are a senior ticket market analyst. Analyze this potential ticket purchase:
-Event: ${form.event}, Venue: ${form.venue}, Date: ${form.date}, Buy Price: $${form.buyPrice}, Section: ${form.tier}, Quantity: ${form.quantity}, Category: ${form.category}
-
-Use web search to find: current secondary market prices, historical resale performance for this artist/team, demand signals, comparable events.
-
-Return ONLY valid JSON (no markdown, no backticks) matching this schema:
-${JSON.stringify(SAMPLE_ANALYSIS, null, 2)}
-
-Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 demand signals, 3-5 risk factors.`;
-      const raw = await callClaude(prompt, true);
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = {
+        event: form.event,
+        venue: form.venue,
+        eventDate: form.date,
+        buyPrice: form.buyPrice,
+        tier: form.tier,
+        quantity: form.quantity,
+        category: form.category,
+      };
+      const searchQueries = typeof EDGE_CALC_PROMPT.searchQueries === 'function'
+        ? EDGE_CALC_PROMPT.searchQueries(input)
+        : EDGE_CALC_PROMPT.searchQueries;
+      const prompt = EDGE_CALC_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: EDGE_CALC_PROMPT.model,
+        maxTokens: EDGE_CALC_PROMPT.maxTokens,
+        searchQueries,
+      });
       const parsed: Analysis = JSON.parse(raw);
       setAnalysis(parsed);
     } catch {

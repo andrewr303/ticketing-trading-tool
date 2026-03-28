@@ -1,26 +1,50 @@
-export async function callClaude(prompt: string, useWebSearch: boolean = true) {
-  const body: Record<string, unknown> = {
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 4000,
-    messages: [{ role: "user", content: prompt }],
-  };
-  if (useWebSearch) {
-    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+import { supabase } from '../lib/supabase'
+import type { ModelTier } from '../lib/prompts'
+
+interface CallOptions {
+  prompt: string
+  modelTier?: ModelTier
+  maxTokens?: number
+  searchQueries?: string[]
+}
+
+export async function callLLM({
+  prompt,
+  modelTier = 'standard',
+  maxTokens = 4000,
+  searchQueries = [],
+}: CallOptions): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session) {
+    throw new Error('Not authenticated')
   }
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": import.meta.env.VITE_CLAUDE_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json();
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claude-proxy`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ prompt, modelTier, maxTokens, searchQueries }),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+
+  const data = await response.json()
   const text = data.content
-    .filter((c: { type: string }) => c.type === "text")
+    .filter((c: { type: string }) => c.type === 'text')
     .map((c: { text: string }) => c.text)
-    .join("");
-  return text.replace(/```json\s*|```\s*/g, "").trim();
+    .join('')
+  return text.replace(/```json\s*|```\s*/g, '').trim()
+}
+
+// Backward-compatible wrapper for pages that haven't migrated yet
+export async function callClaude(prompt: string, _useWebSearch: boolean = true): Promise<string> {
+  return callLLM({ prompt, modelTier: 'standard', searchQueries: [] })
 }
