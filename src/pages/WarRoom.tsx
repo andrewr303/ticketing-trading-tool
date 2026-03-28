@@ -75,7 +75,7 @@ export default function WarRoom() {
   const [sortBy, setSortBy] = useState<string>('risk');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPos, setNewPos] = useState({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert' as const, priceTrend: 'stable' as const });
+  const [newPos, setNewPos] = useState({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert' as 'concert' | 'sports' | 'theater', priceTrend: 'stable' as 'rising' | 'stable' | 'declining' });
 
   const positionsWithRisk = useMemo(() => positions.map(p => ({ ...p, risk: calculateRisk(p) })), [positions]);
 

@@ -775,7 +775,7 @@ Use real historical ticket resale data where possible. For pricing, reference ac
                     }}
                     labelStyle={{ color: '#9ca3af' }}
                     itemStyle={{ fontFamily: 'monospace' }}
-                    formatter={(value: number) => [`$${value}`, undefined]}
+                    formatter={(value) => [`$${value}`, undefined]}
                   />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
                   <ReferenceLine
