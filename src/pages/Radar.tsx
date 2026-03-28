@@ -61,7 +61,7 @@ export default function RadarPage() {
   const [filter, setFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('score');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', category: 'concert' as const, eventDate: '', venue: '' });
+  const [newEvent, setNewEvent] = useState({ name: '', category: 'concert' as 'concert' | 'sports' | 'theater', eventDate: '', venue: '' });
 
   const filtered = useMemo(() => {
     let result = [...watchlist];

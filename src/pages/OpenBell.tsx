@@ -3,8 +3,6 @@ import { callClaude } from "../components/APIClient";
 import { SAMPLE_BRIEF } from "../lib/sampleData";
 import type { BriefData, PriorityEvent, OnSale, SocialSignal } from "../lib/types";
 import {
-  Clock,
-  TrendingUp,
   AlertTriangle,
   Copy,
   Check,
@@ -17,7 +15,6 @@ import {
   Zap,
   Radio,
   Target,
-  Shield,
   CalendarClock,
 } from "lucide-react";
 

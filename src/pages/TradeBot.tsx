@@ -228,7 +228,7 @@ function formatTime(): string {
 function renderMarkdown(text: string) {
   // Split into lines, then process inline markdown
   return text.split('\n').map((line, li) => {
-    const parts: (string | JSX.Element)[] = [];
+    const parts: (string | React.ReactElement)[] = [];
     // bold
     const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
     let last = 0;
