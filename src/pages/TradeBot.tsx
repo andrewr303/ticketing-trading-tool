@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { callClaude } from '../components/APIClient';
+import { callLLM } from '../components/APIClient';
+import { TRADEBOT_PROMPT } from '../lib/prompts';
 import type { Message } from '../lib/types';
 import {
   Hash,
@@ -624,12 +625,27 @@ export default function TradeBot() {
     setLoading(true);
 
     try {
-      const systemPrompt = `You are TradeBot, a ticket market trading assistant embedded in a Slack-style team channel. Keep responses under 150 words. Use **bold** for emphasis and key data points. Include specific numbers, prices, and percentages wherever possible. Use web search to get real, current data about events, ticket prices, and market conditions. Format your responses cleanly with line breaks for readability. Never use markdown headers (#). Use bullet points (•) for lists.`;
-
-      const raw = await callClaude(
-        `${systemPrompt}\n\nUser message: ${trimmed}`,
-        true,
-      );
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = { message: trimmed };
+      const searchQueries = typeof TRADEBOT_PROMPT.searchQueries === 'function'
+        ? TRADEBOT_PROMPT.searchQueries(input)
+        : TRADEBOT_PROMPT.searchQueries;
+      const prompt = TRADEBOT_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: TRADEBOT_PROMPT.model,
+        maxTokens: TRADEBOT_PROMPT.maxTokens,
+        searchQueries,
+      });
       const botMsg: Message = {
         id: crypto.randomUUID(),
         user: 'TradeBot',

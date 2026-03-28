@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Radar as RadarIcon, Plus, RefreshCw, ArrowUp, ArrowDown, ArrowRight, X, Globe, Music, Search, Newspaper, Users, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
-import { callClaude } from '../components/APIClient';
+import { callLLM } from '../components/APIClient';
 import { SAMPLE_WATCHLIST } from '../lib/sampleData';
+import { getWatchlist } from '../lib/api';
+import { RADAR_PROMPT } from '../lib/prompts';
 import type { WatchlistEvent, SignalAnalysis, Signal } from '../lib/types';
 
 const SAMPLE_SIGNALS: Record<string, SignalAnalysis> = {
@@ -55,6 +57,12 @@ function getScoreColor(score: number | undefined): string {
 
 export default function RadarPage() {
   const [watchlist, setWatchlist] = useState<WatchlistEvent[]>(SAMPLE_WATCHLIST);
+
+  useEffect(() => {
+    getWatchlist()
+      .then(data => { if (data.length > 0) setWatchlist(data); })
+      .catch(() => {});
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [signalData, setSignalData] = useState<Record<string, SignalAnalysis>>(SAMPLE_SIGNALS);
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
@@ -86,16 +94,13 @@ export default function RadarPage() {
   const analyzeEvent = async (event: WatchlistEvent) => {
     setLoadingMap(m => ({ ...m, [event.id]: true }));
     try {
-      const prompt = `Analyze current demand signals for this live event:
-Event: ${event.name}, Venue: ${event.venue}, Date: ${event.eventDate}, Category: ${event.category}
-
-Use web search to find: Social media buzz, streaming numbers, Google Trends, news coverage, fan community sentiment, viral moments.
-
-Return ONLY valid JSON (no markdown, no backticks) matching this schema:
-${JSON.stringify(SAMPLE_SIGNALS.w1, null, 2)}
-
-Be specific about numbers and sources.`;
-      const raw = await callClaude(prompt, true);
+      const date = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const input = { event: event.name, venue: event.venue, eventDate: event.eventDate, category: event.category };
+      const searchQueries = typeof RADAR_PROMPT.searchQueries === 'function'
+        ? RADAR_PROMPT.searchQueries(input)
+        : RADAR_PROMPT.searchQueries;
+      const prompt = RADAR_PROMPT.buildPrompt({ date, searchResults: "${searchResults}", ...input });
+      const raw = await callLLM({ prompt, modelTier: RADAR_PROMPT.model, maxTokens: RADAR_PROMPT.maxTokens, searchQueries });
       const parsed: SignalAnalysis = JSON.parse(raw);
       setSignalData(d => ({ ...d, [event.id]: parsed }));
       setWatchlist(wl => wl.map(e => e.id === event.id ? { ...e, demandScore: parsed.demand_score, trend: parsed.trend, lastAnalyzed: new Date().toISOString() } : e));

@@ -23,7 +23,8 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import { callClaude } from '../components/APIClient';
+import { callLLM } from '../components/APIClient';
+import { COMPS_ENGINE_PROMPT } from '../lib/prompts';
 import type { CompResult, CompSearchInput, Comparable } from '../lib/types';
 
 /* ------------------------------------------------------------------ */
@@ -400,28 +401,33 @@ export default function CompsEngine() {
     setLoading(true);
     setResult(null);
     try {
-      const prompt = `You are a ticket resale comparable-event analyst. Given the search input, return a JSON object matching this TypeScript type exactly (no markdown, no explanation, ONLY valid JSON):
-
-interface CompResult {
-  target_event: { name: string; category: string; tier: string; estimated_demand: "very_high"|"high"|"moderate"|"low"; market_context: string };
-  direct_comps: Comparable[];   // 2-4 same-artist comps
-  market_comps: Comparable[];   // 3-5 same-venue or same-genre comps
-  pricing_guidance: { suggested_buy_under: number; expected_resale_range: string; optimal_list_price: number; confidence: number; reasoning: string };
-  key_differences: string[];    // 3-5 items
-  watch_factors: string[];      // 3-5 items
-}
-interface Comparable { event_name: string; date: string; venue: string; city: string; relevance: "same_artist"|"same_venue"|"same_genre"|"same_tier"; relevance_score: number; face_value_range: string; resale_floor: number; resale_median: number; resale_peak: number; roi_range: string; sell_through: "sold_out"|"near_sellout"|"moderate"|"slow"; notes: string }
-
-Search input:
-Event/Artist: ${form.event}
-Venue: ${form.venue || 'any'}
-Date: ${form.date || 'upcoming'}
-Category: ${form.category}
-Market: ${form.market || 'any'}
-
-Use real historical ticket resale data where possible. For pricing, reference actual face values and secondary market prices. Return ONLY the JSON object.`;
-
-      const raw = await callClaude(prompt);
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = {
+        event: form.event,
+        venue: form.venue,
+        eventDate: form.date,
+        category: form.category,
+        market: form.market,
+      };
+      const searchQueries = typeof COMPS_ENGINE_PROMPT.searchQueries === 'function'
+        ? COMPS_ENGINE_PROMPT.searchQueries(input)
+        : COMPS_ENGINE_PROMPT.searchQueries;
+      const prompt = COMPS_ENGINE_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: COMPS_ENGINE_PROMPT.model,
+        maxTokens: COMPS_ENGINE_PROMPT.maxTokens,
+        searchQueries,
+      });
       const parsed: CompResult = JSON.parse(raw);
       setResult(parsed);
     } catch (err) {
