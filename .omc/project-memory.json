@@ -29,6 +29,31 @@
   },
   "customNotes": [],
   "directoryMap": {},
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "src\\pages\\WarRoom.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1774749251513,
+      "type": "directory"
+    },
+    {
+      "path": "src\\pages\\Radar.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1774749246286,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\TradeBot.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1774749248050,
+      "type": "file"
+    },
+    {
+      "path": "src",
+      "accessCount": 1,
+      "lastAccessed": 1774749265110,
+      "type": "directory"
+    }
+  ],
   "userDirectives": []
 }

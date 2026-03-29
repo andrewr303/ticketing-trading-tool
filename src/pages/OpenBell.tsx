@@ -258,6 +258,7 @@ const labelStyle: React.CSSProperties = {
 export default function OpenBell() {
   const [brief, setBrief] = useState<BriefData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getTodayBrief()
@@ -305,6 +306,7 @@ export default function OpenBell() {
   // -----------------------------------------------------------------------
   const generateBrief = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const date = new Date().toLocaleDateString("en-US", {
         weekday: "long",
@@ -313,17 +315,20 @@ export default function OpenBell() {
         day: "numeric",
       });
       const prompt = OPEN_BELL_PROMPT.buildPrompt({ date, searchResults: "${searchResults}" });
+      const searchQueries = typeof OPEN_BELL_PROMPT.searchQueries === 'function'
+        ? OPEN_BELL_PROMPT.searchQueries({})
+        : OPEN_BELL_PROMPT.searchQueries;
       const raw = await callLLM({
         prompt,
         modelTier: OPEN_BELL_PROMPT.model,
         maxTokens: OPEN_BELL_PROMPT.maxTokens,
-        searchQueries: OPEN_BELL_PROMPT.searchQueries,
+        searchQueries,
       });
       const parsed: BriefData = JSON.parse(raw);
       setBrief(parsed);
       saveBrief(parsed).catch(() => {});
-    } catch {
-      setBrief(SAMPLE_BRIEF);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate brief. Check that API keys are configured in Supabase.');
     } finally {
       setLoading(false);
     }
@@ -540,8 +545,48 @@ export default function OpenBell() {
           </div>
         )}
 
+        {/* ERROR STATE */}
+        {!loading && error && (
+          <div
+            className="flex flex-col items-center justify-center gap-4"
+            style={{ minHeight: 400 }}
+          >
+            <AlertTriangle size={48} style={{ color: "#f59e0b" }} />
+            <p
+              style={{
+                color: "#fcd34d",
+                fontSize: "14px",
+                textAlign: "center",
+                maxWidth: 420,
+                lineHeight: 1.6,
+              }}
+            >
+              {error}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={generateBrief}
+                className="text-sm px-4 py-2 rounded"
+                style={{ background: "#059669", color: "#fff" }}
+              >
+                Retry
+              </button>
+              <button
+                onClick={loadDemo}
+                className="text-sm px-4 py-2 rounded border"
+                style={{
+                  borderColor: "var(--border-default)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Load demo instead
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* EMPTY STATE */}
-        {!loading && !brief && (
+        {!loading && !brief && !error && (
           <div
             className="flex flex-col items-center justify-center gap-4"
             style={{ minHeight: 400 }}

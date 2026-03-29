@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { BookOpen, Brain, Loader2, TrendingUp, TrendingDown, DollarSign, Target, Award, AlertTriangle, BarChart3 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { SAMPLE_TRADES } from '../lib/sampleData';
 import { getTrades } from '../lib/api';
 import { callLLM } from '../components/APIClient';
 import { PLAYBOOK_PROMPT } from '../lib/prompts';
@@ -27,15 +26,17 @@ const GRADE_COLORS: Record<string, string> = {
 };
 
 export default function Playbook() {
-  const [trades, setTrades] = useState<Trade[]>(SAMPLE_TRADES);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [analysis, setAnalysis] = useState<PerformanceAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'trades' | 'coaching'>('overview');
 
   useEffect(() => {
     getTrades()
-      .then(data => { if (data.length > 0) setTrades(data); })
-      .catch(() => {});
+      .then(data => setTrades(data))
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
   }, []);
 
   const enriched = useMemo(() => trades.map(t => ({ ...t, ...computeTradeMetrics(t) })), [trades]);
@@ -132,6 +133,15 @@ export default function Playbook() {
     );
   };
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: '#f97316' }} />
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-muted)' }}>Loading trades...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
@@ -141,11 +151,19 @@ export default function Playbook() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>The Playbook</h1>
           <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#f97316', color: '#000', fontSize: '10px' }}>BETA</span>
         </div>
-        <button type="button" onClick={analyzeTrading} disabled={analyzing} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: '#f9731640', color: '#fb923c', background: '#7c2d1230' }}>
+        <button type="button" onClick={analyzeTrading} disabled={analyzing || trades.length === 0} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: '#f9731640', color: '#fb923c', background: '#7c2d1230' }}>
           {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
           {analyzing ? 'Analyzing...' : 'Analyze My Trading'}
         </button>
       </div>
+
+      {/* Empty State */}
+      {trades.length === 0 && (
+        <div className="text-center py-16">
+          <BookOpen size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No trades logged yet. Complete some trades and log them here to track performance and get AI coaching.</p>
+        </div>
+      )}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -179,7 +197,7 @@ export default function Playbook() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                 <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `$${v}`} />
-                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`$${v}`, 'P&L']} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => [`$${v}`, 'P&L']} />
                 <Line type="monotone" dataKey="pl" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -193,7 +211,7 @@ export default function Playbook() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                 <XAxis dataKey="category" tick={{ fill: '#6b7280', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'Avg ROI']} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v}%`, 'Avg ROI']} />
                 <Bar dataKey="avgROI" radius={[4, 4, 0, 0]}>
                   {categoryData.map((d, i) => (
                     <Cell key={i} fill={d.avgROI >= 0 ? '#10b981' : '#ef4444'} />
