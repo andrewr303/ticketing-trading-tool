@@ -384,6 +384,7 @@ export default function CompsEngine() {
   });
   const [result, setResult] = useState<CompResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadDemo = () => {
     setForm({
@@ -400,6 +401,7 @@ export default function CompsEngine() {
     if (!form.event.trim()) return;
     setLoading(true);
     setResult(null);
+    setError(null);
     try {
       const date = new Date().toLocaleDateString("en-US", {
         weekday: "long",
@@ -431,7 +433,7 @@ export default function CompsEngine() {
       const parsed: CompResult = JSON.parse(raw);
       setResult(parsed);
     } catch (err) {
-      console.error('Comp search failed:', err);
+      setError(err instanceof Error ? err.message : 'Comp search failed. Check that API keys are configured in Supabase.');
     } finally {
       setLoading(false);
     }
@@ -576,9 +578,23 @@ export default function CompsEngine() {
       )}
 
       {/* ============================================================ */}
+      {/*  ERROR STATE                                                 */}
+      {/* ============================================================ */}
+      {error && !loading && (
+        <div className="rounded-lg border p-6 text-center" style={{ background: '#78350f20', borderColor: '#f59e0b40' }}>
+          <AlertTriangle size={32} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
+          <p className="text-sm mb-4" style={{ color: '#fcd34d' }}>{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={handleSearch} className="text-sm px-4 py-2 rounded" style={{ background: '#10b981', color: '#fff' }}>Retry</button>
+            <button onClick={loadDemo} className="text-sm px-4 py-2 rounded border" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Load demo instead</button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/*  EMPTY STATE                                                 */}
       {/* ============================================================ */}
-      {!result && !loading && (
+      {!result && !loading && !error && (
         <div className="text-center py-20">
           <BarChart3 size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
           <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>

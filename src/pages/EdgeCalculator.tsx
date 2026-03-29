@@ -65,6 +65,7 @@ export default function EdgeCalculator() {
   const [form, setForm] = useState<AnalysisInput>({ event: '', venue: '', date: '', buyPrice: 0, tier: 'Floor/VIP', quantity: 2, category: 'Concert' });
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('overview');
   const verdictRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +78,7 @@ export default function EdgeCalculator() {
   const analyze = async () => {
     if (!form.event || !form.buyPrice) return;
     setLoading(true);
+    setError(null);
     try {
       const date = new Date().toLocaleDateString("en-US", {
         weekday: "long",
@@ -109,8 +111,8 @@ export default function EdgeCalculator() {
       });
       const parsed: Analysis = JSON.parse(raw);
       setAnalysis(parsed);
-    } catch {
-      setAnalysis(SAMPLE_ANALYSIS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Analysis failed. Check that API keys are configured in Supabase.');
     } finally {
       setLoading(false);
       setTimeout(() => verdictRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -368,8 +370,20 @@ export default function EdgeCalculator() {
         </div>
       )}
 
+      {/* Error state */}
+      {error && !loading && (
+        <div className="rounded-lg border p-6 text-center" style={{ background: '#78350f20', borderColor: '#f59e0b40' }}>
+          <AlertTriangle size={32} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
+          <p className="text-sm mb-4" style={{ color: '#fcd34d' }}>{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={analyze} className="text-sm px-4 py-2 rounded" style={{ background: 'var(--accent-green)', color: '#fff' }}>Retry</button>
+            <button onClick={loadDemo} className="text-sm px-4 py-2 rounded border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}>Load demo instead</button>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!analysis && !loading && (
+      {!analysis && !loading && !error && (
         <div className="text-center py-16">
           <Calculator size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Enter an event and buy price to analyze profitability</p>

@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Shield, X, Plus, TrendingUp, TrendingDown, Minus, AlertTriangle, Search, Loader2, Brain } from 'lucide-react';
-import { SAMPLE_POSITIONS } from '../lib/sampleData';
 import { getPositions, upsertPosition } from '../lib/api';
 import { callLLM } from '../components/APIClient';
 import { WAR_ROOM_PROMPT } from '../lib/prompts';
@@ -71,19 +70,21 @@ function getZoneBadge(zone: RiskScore['zone']) {
 }
 
 export default function WarRoom() {
-  const [positions, setPositions] = useState<Position[]>(SAMPLE_POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('risk');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPos, setNewPos] = useState({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert' as 'concert' | 'sports' | 'theater', priceTrend: 'stable' as 'rising' | 'stable' | 'declining' });
+  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: Position['category']; priceTrend: Position['priceTrend'] }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
 
   useEffect(() => {
     getPositions()
-      .then(data => { if (data.length > 0) setPositions(data); })
-      .catch(() => { /* keep sample data as fallback */ });
+      .then(data => setPositions(data))
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
   }, []);
 
   const positionsWithRisk = useMemo(() => positions.map(p => ({ ...p, risk: calculateRisk(p) })), [positions]);
@@ -169,6 +170,15 @@ export default function WarRoom() {
     }}>{label}</button>
   );
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: '#f59e0b' }} />
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-muted)' }}>Loading positions...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -178,12 +188,21 @@ export default function WarRoom() {
           <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#f59e0b', color: '#000', fontSize: '10px' }}>BETA</span>
         </div>
         <div className="flex gap-2">
-          <button onClick={analyzePortfolio} disabled={analyzing} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: '#f59e0b40', color: '#fcd34d', background: '#78350f30' }}>
+          <button onClick={analyzePortfolio} disabled={analyzing || positions.length === 0} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: '#f59e0b40', color: '#fcd34d', background: '#78350f30' }}>
             {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />} {analyzing ? 'Analyzing...' : 'Analyze Portfolio'}
           </button>
           <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}><Plus size={14} /> Add Position</button>
         </div>
       </div>
+
+      {/* Empty State */}
+      {positions.length === 0 && (
+        <div className="text-center py-16">
+          <Shield size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
+          <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No positions yet. Add your first position to start tracking risk.</p>
+          <button onClick={() => setShowAddForm(true)} className="mt-2 text-xs px-4 py-2 rounded" style={{ background: 'var(--accent-green)', color: '#fff' }}>Add Position</button>
+        </div>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">

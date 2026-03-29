@@ -1,27 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Radar as RadarIcon, Plus, RefreshCw, ArrowUp, ArrowDown, ArrowRight, X, Globe, Music, Search, Newspaper, Users, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { callLLM } from '../components/APIClient';
-import { SAMPLE_WATCHLIST } from '../lib/sampleData';
 import { getWatchlist } from '../lib/api';
 import { RADAR_PROMPT } from '../lib/prompts';
 import type { WatchlistEvent, SignalAnalysis, Signal } from '../lib/types';
-
-const SAMPLE_SIGNALS: Record<string, SignalAnalysis> = {
-  w1: {
-    demand_score: 94, trend: "surging",
-    signals: [
-      { source: "social_media", signal_name: "Twitter/X Mentions", value: "45K+ mentions in 24hrs", direction: "up", weight: "high", detail: "Tour announcement drove massive social engagement. #KendrickDenver trending locally." },
-      { source: "streaming", signal_name: "Spotify Streams", value: "+280% week-over-week", direction: "up", weight: "high", detail: "Album streams surging post-tour announcement. Denver market over-indexing." },
-      { source: "search", signal_name: "Google Trends", value: "Score 92/100 (Denver)", direction: "up", weight: "high", detail: "Search interest at near-peak levels. 'Kendrick Denver tickets' breakout query." },
-      { source: "news", signal_name: "Media Coverage", value: "12 major articles this week", direction: "up", weight: "medium", detail: "Rolling Stone, Pitchfork, Denver Post all covering the Denver date." },
-      { source: "community", signal_name: "Reddit/Fan Forums", value: "3 front-page posts on r/Denver", direction: "up", weight: "medium", detail: "Fan excitement extremely high. Multiple threads about presale strategy." },
-    ],
-    demand_narrative: "Kendrick Lamar's Denver stadium show is generating the strongest demand signals we've seen for a Denver concert since Beyonce's Renaissance Tour. Every measurable signal is pointing up.",
-    price_implication: "Secondary market prices should open 80-120% above face value for floor seats and 40-70% above for lower bowl.",
-    action_window: "Buy at face during presale TODAY. First 48 hours post-onsale offer the best entry.",
-    catalysts_ahead: ["Presale results (today)", "General on-sale (Friday)", "Setlist/production leaks", "Potential guest artist announcement"],
-  },
-};
 
 const SOURCE_ICONS: Record<string, typeof Globe> = { social_media: Globe, streaming: Music, search: Search, news: Newspaper, community: Users };
 const TREND_DISPLAY: Record<string, { icon: typeof ArrowUp; label: string; color: string }> = {
@@ -56,20 +38,22 @@ function getScoreColor(score: number | undefined): string {
 }
 
 export default function RadarPage() {
-  const [watchlist, setWatchlist] = useState<WatchlistEvent[]>(SAMPLE_WATCHLIST);
+  const [watchlist, setWatchlist] = useState<WatchlistEvent[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
     getWatchlist()
-      .then(data => { if (data.length > 0) setWatchlist(data); })
-      .catch(() => {});
+      .then(data => setWatchlist(data))
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
   }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [signalData, setSignalData] = useState<Record<string, SignalAnalysis>>(SAMPLE_SIGNALS);
+  const [signalData, setSignalData] = useState<Record<string, SignalAnalysis>>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('score');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', category: 'concert' as 'concert' | 'sports' | 'theater', eventDate: '', venue: '' });
+  const [newEvent, setNewEvent] = useState<{ name: string; category: WatchlistEvent['category']; eventDate: string; venue: string }>({ name: '', category: 'concert', eventDate: '', venue: '' });
 
   const filtered = useMemo(() => {
     let result = [...watchlist];
@@ -105,9 +89,7 @@ export default function RadarPage() {
       setSignalData(d => ({ ...d, [event.id]: parsed }));
       setWatchlist(wl => wl.map(e => e.id === event.id ? { ...e, demandScore: parsed.demand_score, trend: parsed.trend, lastAnalyzed: new Date().toISOString() } : e));
     } catch {
-      if (!signalData[event.id]) {
-        setSignalData(d => ({ ...d, [event.id]: SAMPLE_SIGNALS.w1 }));
-      }
+      // Show error state - don't silently load demo data
     } finally {
       setLoadingMap(m => ({ ...m, [event.id]: false }));
     }
@@ -119,6 +101,15 @@ export default function RadarPage() {
     setShowAddForm(false);
     setNewEvent({ name: '', category: 'concert', eventDate: '', venue: '' });
   };
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: '#06b6d4' }} />
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-muted)' }}>Loading watchlist...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
