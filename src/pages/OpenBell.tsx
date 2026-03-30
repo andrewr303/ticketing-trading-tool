@@ -292,6 +292,7 @@ export default function OpenBell() {
   useEffect(() => {
     getTodayBrief().then(data => { if (data) setBrief(data); }).catch(() => {});
     getCachedResearch({ regions: regionFilter, categories: [], dateRange }).then(data => { if (data) setResearch(data); }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // -----------------------------------------------------------------------
