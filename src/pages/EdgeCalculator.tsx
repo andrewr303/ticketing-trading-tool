@@ -63,7 +63,23 @@ const VERDICT_STYLES: Record<string, { bg: string; text: string; glow: string }>
 
 export default function EdgeCalculator() {
   const [form, setForm] = useState<AnalysisInput>({ event: '', venue: '', date: '', buyPrice: 0, tier: 'Floor/VIP', quantity: 2, category: 'Concert' });
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(() => {
+    const saved = localStorage.getItem('edge_calculator_analysis');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (analysis) {
+      localStorage.setItem('edge_calculator_analysis', JSON.stringify(analysis));
+    }
+  }, [analysis]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('overview');

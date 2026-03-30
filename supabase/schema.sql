@@ -10,7 +10,7 @@ create extension if not exists "uuid-ossp";
 -- Positions (current inventory)
 create table positions (
   id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null default auth.uid(),
   event_name text not null,
   artist_or_team text not null,
   venue text not null,
@@ -29,7 +29,7 @@ create table positions (
 -- Completed trades (P&L history)
 create table trades (
   id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null default auth.uid(),
   event_name text not null,
   category text not null check (category in ('concert','sports','theater','festival','other')),
   venue text not null,
@@ -48,7 +48,7 @@ create table trades (
 -- Watchlist
 create table watchlist (
   id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null default auth.uid(),
   name text not null,
   category text not null check (category in ('concert','sports','theater')),
   event_date date not null,
@@ -62,7 +62,7 @@ create table watchlist (
 -- Daily briefs (cached AI-generated briefs)
 create table briefs (
   id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null default auth.uid(),
   brief_date date not null default current_date,
   data jsonb not null,
   created_at timestamptz default now(),

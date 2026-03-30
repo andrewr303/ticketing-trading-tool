@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Radar as RadarIcon, Plus, RefreshCw, ArrowUp, ArrowDown, ArrowRight, X, Globe, Music, Search, Newspaper, Users, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { callLLM } from '../components/APIClient';
-import { getWatchlist } from '../lib/api';
+import { getWatchlist, upsertWatchlistItem } from '../lib/api';
 import { RADAR_PROMPT } from '../lib/prompts';
 import type { WatchlistEvent, SignalAnalysis, Signal } from '../lib/types';
 
@@ -86,8 +86,10 @@ export default function RadarPage() {
       const prompt = RADAR_PROMPT.buildPrompt({ date, searchResults: "${searchResults}", ...input });
       const raw = await callLLM({ prompt, modelTier: RADAR_PROMPT.model, maxTokens: RADAR_PROMPT.maxTokens, searchQueries });
       const parsed: SignalAnalysis = JSON.parse(raw);
+      const updated = { ...event, demandScore: parsed.demand_score, trend: parsed.trend, lastAnalyzed: new Date().toISOString() };
       setSignalData(d => ({ ...d, [event.id]: parsed }));
-      setWatchlist(wl => wl.map(e => e.id === event.id ? { ...e, demandScore: parsed.demand_score, trend: parsed.trend, lastAnalyzed: new Date().toISOString() } : e));
+      setWatchlist(wl => wl.map(e => e.id === event.id ? updated : e));
+      upsertWatchlistItem(updated).catch(console.error);
     } catch {
       // Show error state - don't silently load demo data
     } finally {
@@ -95,11 +97,18 @@ export default function RadarPage() {
     }
   };
 
-  const addEvent = () => {
-    const id = 'w-' + Date.now();
-    setWatchlist([...watchlist, { id, ...newEvent }]);
-    setShowAddForm(false);
-    setNewEvent({ name: '', category: 'concert', eventDate: '', venue: '' });
+  const addEvent = async () => {
+    const newItem: Omit<WatchlistEvent, 'id'> = { ...newEvent };
+    try {
+      await upsertWatchlistItem(newItem);
+      // Refresh to get the generated UUID
+      const data = await getWatchlist();
+      setWatchlist(data);
+      setShowAddForm(false);
+      setNewEvent({ name: '', category: 'concert', eventDate: '', venue: '' });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (initialLoading) {

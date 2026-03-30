@@ -28,7 +28,23 @@ const GRADE_COLORS: Record<string, string> = {
 export default function Playbook() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [analysis, setAnalysis] = useState<PerformanceAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<PerformanceAnalysis | null>(() => {
+    const saved = localStorage.getItem('playbook_analysis');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (analysis) {
+      localStorage.setItem('playbook_analysis', JSON.stringify(analysis));
+    }
+  }, [analysis]);
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'trades' | 'coaching'>('overview');
 

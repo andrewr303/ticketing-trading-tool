@@ -591,13 +591,30 @@ function injectBounce() {
 /* ------------------------------------------------------------------ */
 
 export default function TradeBot() {
-  const [messages, setMessages] = useState<Message[]>(PRELOADED_MESSAGES);
+  const [activeChannel, setActiveChannel] = useState('morning-trading');
+  const [channelMessages, setChannelMessages] = useState<Record<string, Message[]>>(() => {
+    const saved = localStorage.getItem('tradebot_messages');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { 'morning-trading': PRELOADED_MESSAGES };
+      }
+    }
+    return { 'morning-trading': PRELOADED_MESSAGES };
+  });
+
+  const messages = channelMessages[activeChannel] || [];
+
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeChannel, setActiveChannel] = useState('morning-trading');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('tradebot_messages', JSON.stringify(channelMessages));
+  }, [channelMessages]);
 
   useEffect(() => {
     injectBounce();
@@ -621,7 +638,10 @@ export default function TradeBot() {
       content: trimmed,
       timestamp: formatTime(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    setChannelMessages((prev) => ({
+      ...prev,
+      [activeChannel]: [...(prev[activeChannel] || []), userMsg]
+    }));
     setLoading(true);
 
     try {
@@ -654,7 +674,10 @@ export default function TradeBot() {
         content: raw,
         timestamp: formatTime(),
       };
-      setMessages((prev) => [...prev, botMsg]);
+      setChannelMessages((prev) => ({
+        ...prev,
+        [activeChannel]: [...(prev[activeChannel] || []), botMsg]
+      }));
     } catch {
       const errMsg: Message = {
         id: crypto.randomUUID(),
@@ -664,7 +687,10 @@ export default function TradeBot() {
         content: '**Error:** Could not reach the analysis engine. Please try again.',
         timestamp: formatTime(),
       };
-      setMessages((prev) => [...prev, errMsg]);
+      setChannelMessages((prev) => ({
+        ...prev,
+        [activeChannel]: [...(prev[activeChannel] || []), errMsg]
+      }));
     } finally {
       setLoading(false);
     }
