@@ -928,7 +928,7 @@ export const PLAYBOOK_PROMPT: PromptConfig = {
   model: 'advanced',  // GPT-5.4 mini (xhigh) -- multi-dimensional behavioral analysis
   maxTokens: 4000,
   searchQueries: [],   // No web search needed -- pure analytical reasoning over trade data
-  buildPrompt: ({ date, searchResults: _, tradeData, metrics }) => `## Role
+  buildPrompt: ({ date, tradeData, metrics }) => `## Role
 
 You are a senior ticket trading performance coach with 20 years of experience. You've managed trading desks, mentored junior traders, and seen every pattern of success and failure. You've been asked to review a trader's complete recent trade history and give an honest performance assessment.
 

@@ -139,29 +139,29 @@ function MetricCard({
   );
 }
 
+function computeCountdown() {
+  const now = new Date();
+  // Build a target of 7:15 AM Mountain Time today
+  // Mountain Time is UTC-7 (MDT) or UTC-6 depending on DST — use America/Denver
+  const mtNow = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Denver" })
+  );
+  const target = new Date(mtNow);
+  target.setHours(7, 15, 0, 0);
+  if (mtNow >= target) {
+    target.setDate(target.getDate() + 1);
+  }
+  const diff = target.getTime() - mtNow.getTime();
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function CountdownTimer() {
-  const [display, setDisplay] = useState("");
+  const [display, setDisplay] = useState(computeCountdown);
 
   useEffect(() => {
-    function computeCountdown() {
-      const now = new Date();
-      // Build a target of 7:15 AM Mountain Time today
-      // Mountain Time is UTC-7 (MDT) or UTC-6 depending on DST — use America/Denver
-      const mtNow = new Date(
-        now.toLocaleString("en-US", { timeZone: "America/Denver" })
-      );
-      const target = new Date(mtNow);
-      target.setHours(7, 15, 0, 0);
-      if (mtNow >= target) {
-        target.setDate(target.getDate() + 1);
-      }
-      const diff = target.getTime() - mtNow.getTime();
-      const h = Math.floor(diff / 3_600_000);
-      const m = Math.floor((diff % 3_600_000) / 60_000);
-      const s = Math.floor((diff % 60_000) / 1000);
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    }
-    setDisplay(computeCountdown());
     const id = setInterval(() => setDisplay(computeCountdown()), 1000);
     return () => clearInterval(id);
   }, []);

@@ -45,6 +45,6 @@ export async function callLLM({
 }
 
 // Backward-compatible wrapper for pages that haven't migrated yet
-export async function callClaude(prompt: string, _useWebSearch: boolean = true): Promise<string> {
+export async function callClaude(prompt: string): Promise<string> {
   return callLLM({ prompt, modelTier: 'standard', searchQueries: [] })
 }
