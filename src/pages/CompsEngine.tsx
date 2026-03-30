@@ -382,7 +382,38 @@ export default function CompsEngine() {
     category: 'concert',
     market: 'Denver',
   });
-  const [result, setResult] = useState<CompResult | null>(null);
+  const [result, setResult] = useState<CompResult | null>(() => {
+    const saved = localStorage.getItem('comps_engine_result');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (result) {
+      localStorage.setItem('comps_engine_result', JSON.stringify(result));
+    }
+  }, [result]);
+
+  useEffect(() => {
+    const savedForm = localStorage.getItem('comps_engine_form');
+    if (savedForm) {
+      try {
+        setForm(JSON.parse(savedForm));
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('comps_engine_form', JSON.stringify(form));
+  }, [form]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

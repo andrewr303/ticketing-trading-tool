@@ -123,9 +123,7 @@ Deno.serve(async (req) => {
   const searchResults = await youSearch(searchQueries)
 
   // Step 2: Inject search results into prompt if it has the placeholder
-  const finalPrompt = prompt.includes("${searchResults}")
-    ? prompt
-    : prompt.replace(/\$\{searchResults\}/g, searchResults)
+  const finalPrompt = prompt.replace(/\$\{searchResults\}/g, searchResults)
 
   // Step 3: Call OpenRouter
   const data = await callOpenRouter(model, finalPrompt, maxTokens)

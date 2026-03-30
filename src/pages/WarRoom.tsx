@@ -117,12 +117,17 @@ export default function WarRoom() {
 
   const addPosition = async () => {
     const purchaseDate = new Date().toISOString().split('T')[0];
-    const localId = 'new-' + Date.now();
-    const pos = { ...newPos, id: localId, purchaseDate };
-    setPositions([...positions, pos]);
-    setShowAddForm(false);
-    setNewPos({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
-    await upsertPosition({ ...newPos, purchaseDate }).catch(() => {});
+    const artistOrTeam = newPos.eventName.split('—')[0].trim();
+    const newItem: Omit<Position, 'id'> = { ...newPos, artistOrTeam, purchaseDate };
+    try {
+      await upsertPosition(newItem);
+      const data = await getPositions();
+      setPositions(data);
+      setShowAddForm(false);
+      setNewPos({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable', purchaseDate: '' });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
