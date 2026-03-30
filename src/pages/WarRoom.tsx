@@ -78,7 +78,7 @@ export default function WarRoom() {
   const [sortBy, setSortBy] = useState<string>('risk');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: Position['category']; priceTrend: Position['priceTrend'] }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
+  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: Position['category']; priceTrend: Position['priceTrend']; purchaseDate: string }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable', purchaseDate: '' });
 
   useEffect(() => {
     getPositions()

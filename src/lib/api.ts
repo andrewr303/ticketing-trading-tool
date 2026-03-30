@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Position, Trade, WatchlistEvent, BriefData } from './types'
+import type { Position, Trade, WatchlistEvent, BriefData, DeepResearchResult } from './types'
 
 // ============================================
 // POSITIONS
@@ -162,5 +162,44 @@ export async function saveBrief(briefData: BriefData) {
     brief_date: today,
     data: briefData as unknown as Record<string, unknown>,
   }, { onConflict: 'user_id,brief_date' })
+  if (error) throw error
+}
+
+// ============================================
+// DEEP RESEARCH CACHE
+// ============================================
+
+export async function getCachedResearch(params: {
+  regions: string[]
+  categories: string[]
+  dateRange: string
+}): Promise<DeepResearchResult | null> {
+  const today = new Date().toISOString().split('T')[0]
+  const { data, error } = await supabase
+    .from('deep_research_cache')
+    .select('data')
+    .eq('research_date', today)
+    .contains('regions', params.regions)
+    .contains('categories', params.categories.length > 0 ? params.categories : ['concert', 'sports', 'theater', 'comedy', 'festival'])
+    .eq('date_range', params.dateRange)
+    .maybeSingle()
+  if (error) throw error
+  return data?.data as DeepResearchResult | null
+}
+
+export async function saveResearchCache(
+  result: DeepResearchResult,
+  params: { regions: string[]; categories: string[]; dateRange: string },
+  metadata?: Record<string, unknown>
+) {
+  const today = new Date().toISOString().split('T')[0]
+  const { error } = await supabase.from('deep_research_cache').upsert({
+    research_date: today,
+    regions: params.regions,
+    categories: params.categories.length > 0 ? params.categories : ['concert', 'sports', 'theater', 'comedy', 'festival'],
+    date_range: params.dateRange,
+    data: result as unknown as Record<string, unknown>,
+    metadata: metadata as unknown as Record<string, unknown> ?? null,
+  }, { onConflict: 'user_id,research_date,regions,categories,date_range' })
   if (error) throw error
 }

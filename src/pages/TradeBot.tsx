@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { callLLM } from '../components/APIClient';
 import { TRADEBOT_PROMPT } from '../lib/prompts';
 import type { Message } from '../lib/types';
@@ -604,7 +604,7 @@ export default function TradeBot() {
     return { 'morning-trading': PRELOADED_MESSAGES };
   });
 
-  const messages = channelMessages[activeChannel] || [];
+  const messages = useMemo(() => channelMessages[activeChannel] || [], [channelMessages, activeChannel]);
 
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -804,7 +804,7 @@ export default function TradeBot() {
 
         {/* Messages */}
         <div style={styles.messageList}>
-          {messages.map((msg) => (
+          {messages.map((msg: Message) => (
             <div
               key={msg.id}
               className="tb-msg-row"
@@ -832,7 +832,7 @@ export default function TradeBot() {
                 </div>
                 {msg.reactions && msg.reactions.length > 0 && (
                   <div style={styles.reactions}>
-                    {msg.reactions.map((r, i) => (
+                    {msg.reactions.map((r: { emoji: string; count: number }, i: number) => (
                       <span key={i} className="tb-reaction" style={styles.reactionPill}>
                         {r.emoji} {r.count}
                       </span>

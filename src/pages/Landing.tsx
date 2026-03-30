@@ -12,15 +12,15 @@ import {
 const TOOLS = [
   {
     path: '/open-bell',
-    name: 'Open Bell',
-    description: 'AI-generated morning trading brief for the 7:15 AM session. Market signals, priority events, on-sales, and action items.',
+    name: 'Deep Research',
+    description: 'AI-powered nationwide event discovery with multi-dimensional scoring, deep signal analysis, and source citations. Includes quick Denver morning brief.',
     icon: Sun,
     color: '#10b981',
   },
   {
     path: '/edge',
     name: 'Edge Calculator',
-    description: 'Input any event + buy price, get a full profitability analysis with ROI projections, comps, and position sizing.',
+    description: 'Search for events, auto-populate details, and get full profitability analysis with ROI projections, comps, and dynamic venue-based section tiers.',
     icon: Calculator,
     color: '#3b82f6',
   },
