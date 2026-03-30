@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Calculator, Loader2, TrendingUp, TrendingDown, AlertTriangle, Target, Clock, DollarSign, BarChart3, ShieldAlert, ArrowRight } from 'lucide-react';
 import { callLLM } from '../components/APIClient';
 import { EDGE_CALC_PROMPT } from '../lib/prompts';
-import type { Analysis, AnalysisInput } from '../lib/types';
+import type { Analysis, AnalysisInput, EventSearchResult } from '../lib/types';
+import EventSearchInput from '../components/EventSearchInput';
+import { getTiersForVenue } from '../lib/venueTiers';
 
 const SAMPLE_ANALYSIS: Analysis = {
   verdict: "STRONG_BUY",
@@ -63,6 +65,7 @@ const VERDICT_STYLES: Record<string, { bg: string; text: string; glow: string }>
 
 export default function EdgeCalculator() {
   const [form, setForm] = useState<AnalysisInput>({ event: '', venue: '', date: '', buyPrice: 0, tier: 'Floor/VIP', quantity: 2, category: 'Concert' });
+  const [availableTiers, setAvailableTiers] = useState<string[]>(['Floor/VIP', 'Lower Bowl', 'Mid Level', 'Upper Bowl', 'GA']);
   const [analysis, setAnalysis] = useState<Analysis | null>(() => {
     const saved = localStorage.getItem('edge_calculator_analysis');
     if (saved) {
@@ -85,8 +88,35 @@ export default function EdgeCalculator() {
   const [activeSection, setActiveSection] = useState<string>('overview');
   const verdictRef = useRef<HTMLDivElement>(null);
 
+  const handleEventSelect = (result: EventSearchResult) => {
+    if (!result.venue && !result.date) {
+      // Manual mode — just update event name
+      setForm(f => ({ ...f, event: result.name }));
+      return;
+    }
+    const tiers = getTiersForVenue(result.venue);
+    setAvailableTiers(tiers);
+    const catMap: Record<string, string> = { concert: 'Concert', sports: 'Sports', theater: 'Theater', comedy: 'Comedy', festival: 'Festival', other: 'Other' };
+    setForm(f => ({
+      ...f,
+      event: result.name,
+      venue: result.venue || f.venue,
+      date: result.date || f.date,
+      category: catMap[result.category] || f.category,
+      tier: tiers[0],
+    }));
+  };
+
+  const handleVenueChange = (venue: string) => {
+    const tiers = getTiersForVenue(venue);
+    setAvailableTiers(tiers);
+    setForm(f => ({ ...f, venue, tier: tiers[0] }));
+  };
+
   const loadDemo = () => {
-    setForm({ event: 'Kendrick Lamar — Empower Field', venue: 'Empower Field, Denver', date: '2026-07-25', buyPrice: 250, tier: 'Floor/VIP', quantity: 4, category: 'Concert' });
+    const tiers = getTiersForVenue('Empower Field, Denver');
+    setAvailableTiers(tiers);
+    setForm({ event: 'Kendrick Lamar — Empower Field', venue: 'Empower Field, Denver', date: '2026-07-25', buyPrice: 250, tier: tiers[0], quantity: 4, category: 'Concert' });
     setAnalysis(SAMPLE_ANALYSIS);
     setTimeout(() => verdictRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
@@ -171,12 +201,11 @@ export default function EdgeCalculator() {
       <div className="rounded-lg border p-5 mb-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-default)' }}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="md:col-span-2">
-            <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Event / Artist / Team</label>
-            <input value={form.event} onChange={e => setForm({ ...form, event: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} placeholder="e.g. Kendrick Lamar — Empower Field" />
+            <EventSearchInput onSelect={handleEventSelect} initialValue={form.event} />
           </div>
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Venue</label>
-            <input value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+            <input value={form.venue} onChange={e => handleVenueChange(e.target.value)} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
           </div>
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Event Date</label>
@@ -193,7 +222,7 @@ export default function EdgeCalculator() {
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Section Tier</label>
             <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
-              <option>Floor/VIP</option><option>Lower Bowl</option><option>Mid Level</option><option>Upper Bowl</option><option>GA</option>
+              {availableTiers.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>

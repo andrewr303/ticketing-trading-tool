@@ -202,6 +202,118 @@ export interface Trade {
   notes: string;
 }
 
+// ---------- Event Search Types ----------
+
+export interface EventSearchResult {
+  id: string;
+  name: string;
+  venue: string;
+  date: string;
+  category: "concert" | "sports" | "theater" | "comedy" | "festival" | "other";
+  source: string;
+  url?: string;
+  price_range?: string;
+}
+
+export interface VenueTierConfig {
+  venueName: string;
+  aliases: string[];
+  tiers: string[];
+}
+
+// ---------- Deep Research Types ----------
+
+export interface DeepResearchResult {
+  generated_at: string;
+  market_overview: string;
+  discovered_events: DiscoveredEvent[];
+  signal_dashboard: SignalDashboard;
+  on_sales: OnSaleDiscovery[];
+  risk_alerts: RiskAlert[];
+  sources: Citation[];
+  recommended_focus: string;
+}
+
+export interface DiscoveredEvent {
+  event_name: string;
+  artist_or_team: string;
+  event_date: string;
+  venue: string;
+  city: string;
+  state: string;
+  category: "concert" | "sports" | "theater" | "comedy" | "festival";
+  edge_score: number;
+  demand_score: number;
+  supply_score: number;
+  roi_score: number;
+  timing_score: number;
+  inefficiency_score: number;
+  face_value_range: string | null;
+  secondary_floor: number | null;
+  secondary_median: number | null;
+  inventory_level: "scarce" | "tight" | "moderate" | "abundant";
+  sell_through_pct: number | null;
+  price_velocity: "surging" | "rising" | "stable" | "declining" | "crashing";
+  action: "BUY" | "SELL" | "HOLD" | "WATCH";
+  confidence: number;
+  estimated_roi_pct: number;
+  reasoning: string;
+  source_citations: number[];
+}
+
+export interface SignalDashboard {
+  social: SignalEntry[];
+  streaming: SignalEntry[];
+  search_trends: SignalEntry[];
+  news: SignalEntry[];
+  market: SignalEntry[];
+}
+
+export interface SignalEntry {
+  source: string;
+  metric: string;
+  value: string;
+  direction: "up" | "stable" | "down";
+  strength: "strong" | "moderate" | "weak";
+  affected_events: string[];
+  detail: string;
+}
+
+export interface OnSaleDiscovery {
+  event_name: string;
+  date: string;
+  time: string;
+  timezone: string;
+  platform: string;
+  sale_type: "general" | "presale" | "amex" | "fan_club" | "venue";
+  profit_potential: "high" | "medium" | "low";
+  notes: string;
+  region: string;
+}
+
+export interface RiskAlert {
+  severity: "critical" | "warning" | "info";
+  title: string;
+  detail: string;
+  affected_events: string[];
+  defensive_action: string;
+}
+
+export interface Citation {
+  index: number;
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface DeepResearchRequest {
+  regions?: string[];
+  categories?: string[];
+  dateRange?: "this_week" | "next_2_weeks" | "this_month" | "next_3_months";
+  effortLevel?: "standard" | "deep";
+  focusAreas?: string[];
+}
+
 export interface PerformanceAnalysis {
   overall_assessment: string;
   grade: string;

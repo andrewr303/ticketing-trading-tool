@@ -17,7 +17,7 @@ import { useAuth } from '../lib/auth';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: Home },
-  { path: '/open-bell', label: 'Open Bell', icon: Sun },
+  { path: '/open-bell', label: 'Deep Research', icon: Sun },
   { path: '/edge', label: 'Edge Calculator', icon: Calculator },
   { path: '/tradebot', label: 'TradeBot', icon: MessageSquare },
   { path: '/war-room', label: 'War Room', icon: Shield },
