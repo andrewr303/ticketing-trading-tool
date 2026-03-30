@@ -9,4 +9,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '')
+// Use a placeholder URL to prevent createClient from throwing at module load time.
+// Auth operations will fail gracefully and the error is surfaced via AuthProvider.
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder'
+)
