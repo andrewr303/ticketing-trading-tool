@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Calculator, Loader2, TrendingUp, TrendingDown, AlertTriangle, Target, Clock, DollarSign, BarChart3, ShieldAlert, ArrowRight } from 'lucide-react';
 import { callLLM } from '../components/APIClient';
 import { EDGE_CALC_PROMPT } from '../lib/prompts';
