@@ -200,8 +200,6 @@ const QUICK_COMMANDS = [
     message: '@TradeBot Run a risk check on our current inventory positions.',
   },
 ];
-
-/* ------------------------------------------------------------------ */
 /*  Avatar colors                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -224,6 +222,24 @@ function formatTime(): string {
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${m} ${ampm}`;
+}
+
+function buildTradeBotErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+
+    if (message.includes('not authenticated') || message.includes('unauthorized') || message.includes('401')) {
+      return '**Error:** Your session expired. Sign back in, then try TradeBot again.';
+    }
+
+    if (message.includes('empty response')) {
+      return '**Error:** The analysis engine returned an empty response. Try sending the request again.';
+    }
+
+    return `**Error:** ${error.message}`;
+  }
+
+  return '**Error:** Could not reach the analysis engine. Please try again.';
 }
 
 function renderMarkdown(text: string) {
@@ -290,7 +306,6 @@ const styles = {
     overflow: 'hidden',
     position: 'relative' as const,
   },
-  /* Sidebar */
   sidebar: {
     width: 220,
     minWidth: 220,
@@ -628,6 +643,7 @@ export default function TradeBot() {
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+    const channelAtSend = activeChannel;
     setInputValue('');
 
     const userMsg: Message = {
@@ -640,7 +656,7 @@ export default function TradeBot() {
     };
     setChannelMessages((prev) => ({
       ...prev,
-      [activeChannel]: [...(prev[activeChannel] || []), userMsg]
+      [channelAtSend]: [...(prev[channelAtSend] || []), userMsg]
     }));
     setLoading(true);
 
@@ -676,20 +692,20 @@ export default function TradeBot() {
       };
       setChannelMessages((prev) => ({
         ...prev,
-        [activeChannel]: [...(prev[activeChannel] || []), botMsg]
+        [channelAtSend]: [...(prev[channelAtSend] || []), botMsg]
       }));
-    } catch {
+    } catch (error) {
       const errMsg: Message = {
         id: crypto.randomUUID(),
         user: 'TradeBot',
         avatar: 'TB',
         isBot: true,
-        content: '**Error:** Could not reach the analysis engine. Please try again.',
+        content: buildTradeBotErrorMessage(error),
         timestamp: formatTime(),
       };
       setChannelMessages((prev) => ({
         ...prev,
-        [activeChannel]: [...(prev[activeChannel] || []), errMsg]
+        [channelAtSend]: [...(prev[channelAtSend] || []), errMsg]
       }));
     } finally {
       setLoading(false);
@@ -711,6 +727,8 @@ export default function TradeBot() {
       <button
         className="tb-mobile-toggle"
         style={styles.mobileToggle}
+        aria-label={sidebarOpen ? 'Close TradeBot sidebar' : 'Open TradeBot sidebar'}
+        title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
@@ -875,8 +893,13 @@ export default function TradeBot() {
               <button
                 key={qc.label}
                 className="tb-quick"
-                style={styles.quickBtn}
+                style={{
+                  ...styles.quickBtn,
+                  opacity: loading ? 0.6 : 1,
+                  cursor: loading ? 'default' : 'pointer',
+                }}
                 onClick={() => send(qc.message)}
+                disabled={loading}
               >
                 <qc.icon size={14} />
                 {qc.label}
@@ -898,10 +921,14 @@ export default function TradeBot() {
               onKeyDown={handleKey}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
+              disabled={loading}
             />
             <button
-              style={styles.sendBtn(inputValue.trim().length > 0)}
+              style={styles.sendBtn(inputValue.trim().length > 0 && !loading)}
               onClick={() => send(inputValue)}
+              disabled={loading || inputValue.trim().length === 0}
+              aria-label="Send message to TradeBot"
+              title="Send message"
             >
               <Send size={16} color="#fff" />
             </button>

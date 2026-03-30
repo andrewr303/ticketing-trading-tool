@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { ModelTier } from '../lib/prompts'
+import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
 
 interface CallOptions {
   prompt: string
@@ -8,40 +9,104 @@ interface CallOptions {
   searchQueries?: string[]
 }
 
-export async function callLLM({
-  prompt,
-  modelTier = 'standard',
-  maxTokens = 4000,
-  searchQueries = [],
-}: CallOptions): Promise<string> {
+type LLMContentBlock = {
+  type?: string
+  text?: string
+}
+
+type LLMResponsePayload = {
+  content?: LLMContentBlock[] | string
+  choices?: Array<{
+    message?: {
+      content?: string | LLMContentBlock[]
+    }
+  }>
+  output_text?: string
+}
+
+async function getAccessToken(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession()
 
   if (!session) {
     throw new Error('Not authenticated')
   }
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claude-proxy`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ prompt, modelTier, maxTokens, searchQueries }),
-    }
-  )
+  return session.access_token
+}
 
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
+function extractText(value: string | LLMContentBlock[] | undefined): string {
+  if (typeof value === 'string') {
+    return value
   }
 
-  const data = await response.json()
-  const text = data.content
-    .filter((c: { type: string }) => c.type === 'text')
-    .map((c: { text: string }) => c.text)
-    .join('')
-  return text.replace(/```json\s*|```\s*/g, '').trim()
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry) => entry?.type === 'text' && typeof entry.text === 'string')
+      .map((entry) => entry.text)
+      .join('')
+  }
+
+  return ''
+}
+
+function getFunctionErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return 'Unknown edge function error'
+}
+
+function normalizeLLMResponse(data: LLMResponsePayload | null): string {
+  if (!data) {
+    return ''
+  }
+
+  const directContent = extractText(data.content)
+  if (directContent) {
+    return directContent.replace(/```json\s*|```\s*/g, '').trim()
+  }
+
+  const choiceContent = extractText(data.choices?.[0]?.message?.content)
+  if (choiceContent) {
+    return choiceContent.replace(/```json\s*|```\s*/g, '').trim()
+  }
+
+  if (typeof data.output_text === 'string') {
+    return data.output_text.replace(/```json\s*|```\s*/g, '').trim()
+  }
+
+  return ''
+}
+
+export async function callLLM({
+  prompt,
+  modelTier = 'standard',
+  maxTokens = 4000,
+  searchQueries = [],
+}: CallOptions): Promise<string> {
+  const accessToken = await getAccessToken()
+  const { data, error } = await supabase.functions.invoke<LLMResponsePayload>('claude-proxy', {
+    body: { prompt, modelTier, maxTokens, searchQueries },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  if (error) {
+    throw new Error(getFunctionErrorMessage(error))
+  }
+
+  const text = normalizeLLMResponse(data)
+  if (!text) {
+    throw new Error('Analysis engine returned an empty response')
+  }
+
+  return text
 }
 
 // Backward-compatible wrapper for pages that haven't migrated yet
@@ -53,26 +118,20 @@ export async function callClaude(prompt: string): Promise<string> {
 // Event Search (lightweight — no LLM, just You.com search + parsing)
 // ---------------------------------------------------------------------------
 
-import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
-
 export async function searchEvents(query: string): Promise<EventSearchResult[]> {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  const accessToken = await getAccessToken()
+  const { data, error } = await supabase.functions.invoke<EventSearchResult[]>('event-search', {
+    body: { query },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/event-search`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ query }),
-    }
-  )
+  if (error) {
+    throw new Error(getFunctionErrorMessage(error))
+  }
 
-  if (!response.ok) throw new Error(`Search error: ${response.status}`)
-  return response.json()
+  return data ?? []
 }
 
 // ---------------------------------------------------------------------------
@@ -90,21 +149,21 @@ export interface DeepResearchResponse {
 }
 
 export async function callDeepResearch(options: DeepResearchRequest): Promise<DeepResearchResponse> {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  const accessToken = await getAccessToken()
+  const { data, error } = await supabase.functions.invoke<DeepResearchResponse>('deep-research', {
+    body: options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deep-research`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(options),
-    }
-  )
+  if (error) {
+    throw new Error(getFunctionErrorMessage(error))
+  }
 
-  if (!response.ok) throw new Error(`Deep research error: ${response.status}`)
-  return response.json()
+  if (!data) {
+    throw new Error('Deep research returned no data')
+  }
+
+  return data
 }
