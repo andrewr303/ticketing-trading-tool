@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git add src/pages/Radar.tsx src/pages/TradeBot.tsx src/pages/WarRoom.tsx && git rebase --continue 2>&1\",\"description\":\"Stage resolved conflicts and continue rebase\"}",
-  "error": "Exit code 1\nYou must edit all merge conflicts and then\nmark them as resolved using git add",
-  "timestamp": "2026-03-29T01:54:19.375Z",
-  "retry_count": 2
+  "tool_input_preview": "{\"command\":\"cd c:/dev/ticketing-trading-tool && gh pr create --base claude/ticket-trading-ai-tools-0XB8B --title \\\"Deep Research event discovery + Edge Calculator event search\\\" --body \\\"$(cat <<'EOF'...",
+  "error": "Exit code 1\nWarning: 3 uncommitted changes\na pull request for branch \"feature/supabase-integration\" into branch \"claude/ticket-trading-ai-tools-0XB8B\" already exists:\nhttps://github.com/andrewr303/ticketing-trading-tool/pull/6",
+  "timestamp": "2026-03-30T21:22:19.988Z",
+  "retry_count": 1
 }
