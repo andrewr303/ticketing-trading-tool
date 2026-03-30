@@ -79,7 +79,7 @@ function extractVenue(text: string): string {
 
 function cleanTitle(title: string): string {
   return title
-    .replace(/\s*[\|–—-]\s*(Tickets?|StubHub|SeatGeek|Vivid Seats|Ticketmaster|AXS|TickPick|LiveNation).*$/i, "")
+    .replace(/\s*[|–—-]\s*(Tickets?|StubHub|SeatGeek|Vivid Seats|Ticketmaster|AXS|TickPick|LiveNation).*$/i, "")
     .replace(/\s*\(?\d{4}\)?\s*$/, "")
     .replace(/\s*Tickets?\s*$/i, "")
     .trim()
