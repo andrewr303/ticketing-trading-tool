@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1774899066509,
+  "lastScanned": 1774995362074,
   "projectRoot": "c:\\dev\\ticketing-trading-tool",
   "techStack": {
     "languages": [
@@ -77,7 +77,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 3,
-      "lastAccessed": 1774899066428,
+      "lastAccessed": 1774995361974,
       "keyFiles": [
         "favicon.svg",
         "icons.svg",
@@ -88,7 +88,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 2,
-      "lastAccessed": 1774899066447,
+      "lastAccessed": 1774995361998,
       "keyFiles": [
         "favicon.svg",
         "icons.svg"
@@ -98,7 +98,7 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1774899066449,
+      "lastAccessed": 1774995362009,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -108,8 +108,8 @@
     "supabase": {
       "path": "supabase",
       "purpose": null,
-      "fileCount": 2,
-      "lastAccessed": 1774899066451,
+      "fileCount": 3,
+      "lastAccessed": 1774995362012,
       "keyFiles": [
         "config.toml",
         "schema.sql"
@@ -119,17 +119,17 @@
       "path": "dist\\assets",
       "purpose": "Static assets",
       "fileCount": 2,
-      "lastAccessed": 1774899066452,
+      "lastAccessed": 1774995362016,
       "keyFiles": [
-        "index-B1TOGXmd.css",
-        "index-BaMwgnhM.js"
+        "index-CcKZR5rX.js",
+        "index-DCHR8mWB.css"
       ]
     },
     "src\\assets": {
       "path": "src\\assets",
       "purpose": "Static assets",
       "fileCount": 3,
-      "lastAccessed": 1774899066455,
+      "lastAccessed": 1774995362019,
       "keyFiles": [
         "hero.png",
         "react.svg",
@@ -139,18 +139,19 @@
     "src\\components": {
       "path": "src\\components",
       "purpose": "UI components",
-      "fileCount": 2,
-      "lastAccessed": 1774899066456,
+      "fileCount": 4,
+      "lastAccessed": 1774995362020,
       "keyFiles": [
         "APIClient.tsx",
-        "Layout.tsx"
+        "ErrorBoundary.tsx",
+        "EventSearchInput.tsx"
       ]
     },
     "src\\lib": {
       "path": "src\\lib",
       "purpose": "Library code",
-      "fileCount": 6,
-      "lastAccessed": 1774899066457,
+      "fileCount": 7,
+      "lastAccessed": 1774995362021,
       "keyFiles": [
         "api.ts",
         "auth.tsx",
@@ -161,7 +162,7 @@
       "path": "src\\pages",
       "purpose": "Page components",
       "fileCount": 9,
-      "lastAccessed": 1774899066458,
+      "lastAccessed": 1774995362024,
       "keyFiles": [
         "CompsEngine.tsx",
         "EdgeCalculator.tsx",
@@ -169,247 +170,6 @@
       ]
     }
   },
-  "hotPaths": [
-    {
-      "path": "src\\pages\\OpenBell.tsx",
-      "accessCount": 30,
-      "lastAccessed": 1774989272764,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\auth.tsx",
-      "accessCount": 10,
-      "lastAccessed": 1774900671346,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\prompts.ts",
-      "accessCount": 10,
-      "lastAccessed": 1774989025298,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\APIClient.tsx",
-      "accessCount": 9,
-      "lastAccessed": 1774989207116,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\EdgeCalculator.tsx",
-      "accessCount": 9,
-      "lastAccessed": 1774989214991,
-      "type": "file"
-    },
-    {
-      "path": "src\\App.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1774900596975,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\api.ts",
-      "accessCount": 7,
-      "lastAccessed": 1774901177139,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\types.ts",
-      "accessCount": 7,
-      "lastAccessed": 1774989044553,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\supabase.ts",
-      "accessCount": 6,
-      "lastAccessed": 1774900596006,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\Landing.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1774901666163,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\CompsEngine.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1774989249918,
-      "type": "directory"
-    },
-    {
-      "path": "src",
-      "accessCount": 5,
-      "lastAccessed": 1774989289877,
-      "type": "directory"
-    },
-    {
-      "path": "src\\main.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1774900682441,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\Radar.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1774989247107,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\WarRoom.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1774989281296,
-      "type": "directory"
-    },
-    {
-      "path": ".env.example",
-      "accessCount": 4,
-      "lastAccessed": 1774989290334,
-      "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 3,
-      "lastAccessed": 1774900496186,
-      "type": "directory"
-    },
-    {
-      "path": "src\\components\\EventSearchInput.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1774901617673,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\Layout.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1774901656958,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\schema.sql",
-      "accessCount": 3,
-      "lastAccessed": 1774904729510,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\claude-proxy\\index.ts",
-      "accessCount": 3,
-      "lastAccessed": 1774905052621,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\TradeBot.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1774989222462,
-      "type": "file"
-    },
-    {
-      "path": "index.html",
-      "accessCount": 2,
-      "lastAccessed": 1774899551607,
-      "type": "file"
-    },
-    {
-      "path": "src\\index.css",
-      "accessCount": 2,
-      "lastAccessed": 1774899551826,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\Login.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1774899560293,
-      "type": "file"
-    },
-    {
-      "path": "vite.config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1774900127719,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 2,
-      "lastAccessed": 1774900128394,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\ErrorBoundary.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1774900596550,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\sampleData.ts",
-      "accessCount": 2,
-      "lastAccessed": 1774900998911,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.json",
-      "accessCount": 1,
-      "lastAccessed": 1774899171904,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.app.json",
-      "accessCount": 1,
-      "lastAccessed": 1774899230860,
-      "type": "file"
-    },
-    {
-      "path": ".env",
-      "accessCount": 1,
-      "lastAccessed": 1774899232953,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.node.json",
-      "accessCount": 1,
-      "lastAccessed": 1774899470068,
-      "type": "file"
-    },
-    {
-      "path": "supabase",
-      "accessCount": 1,
-      "lastAccessed": 1774900479059,
-      "type": "directory"
-    },
-    {
-      "path": "src\\lib\\venueTiers.ts",
-      "accessCount": 1,
-      "lastAccessed": 1774901040910,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\event-search\\index.ts",
-      "accessCount": 1,
-      "lastAccessed": 1774901069732,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\deep-research\\index.ts",
-      "accessCount": 1,
-      "lastAccessed": 1774901154549,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\claude-proxy\\deno.json",
-      "accessCount": 1,
-      "lastAccessed": 1774905061523,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\deep-research\\deno.json",
-      "accessCount": 1,
-      "lastAccessed": 1774905065756,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\event-search\\deno.json",
-      "accessCount": 1,
-      "lastAccessed": 1774905066978,
-      "type": "file"
-    }
-  ],
+  "hotPaths": [],
   "userDirectives": []
 }
