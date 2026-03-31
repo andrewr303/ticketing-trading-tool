@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd c:/dev/ticketing-trading-tool && gh pr create --base claude/ticket-trading-ai-tools-0XB8B --title \\\"Deep Research event discovery + Edge Calculator event search\\\" --body \\\"$(cat <<'EOF'...",
-  "error": "Exit code 1\nWarning: 3 uncommitted changes\na pull request for branch \"feature/supabase-integration\" into branch \"claude/ticket-trading-ai-tools-0XB8B\" already exists:\nhttps://github.com/andrewr303/ticketing-trading-tool/pull/6",
-  "timestamp": "2026-03-30T21:22:19.988Z",
+  "tool_input_preview": "{\"command\":\"cd c:/dev/ticketing-trading-tool && git add src/components/APIClient.tsx supabase/functions/claude-proxy/index.ts supabase/functions/deep-research/index.ts supabase/functions/event-search/...",
+  "error": "Exit code 1\nThe following paths are ignored by one of your .gitignore files:\n.omc\nhint: Use -f if you really want to add them.\nhint: Disable this message with \"git config set advice.addIgnoredFile false\"",
+  "timestamp": "2026-03-31T00:14:32.358Z",
   "retry_count": 1
 }

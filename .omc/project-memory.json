@@ -172,14 +172,32 @@
   "hotPaths": [
     {
       "path": "src\\pages\\OpenBell.tsx",
-      "accessCount": 22,
-      "lastAccessed": 1774901619324,
+      "accessCount": 24,
+      "lastAccessed": 1774911613054,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\APIClient.tsx",
+      "accessCount": 15,
+      "lastAccessed": 1774911600793,
       "type": "file"
     },
     {
       "path": "src\\lib\\auth.tsx",
-      "accessCount": 10,
-      "lastAccessed": 1774900671346,
+      "accessCount": 11,
+      "lastAccessed": 1774910666182,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\api.ts",
+      "accessCount": 8,
+      "lastAccessed": 1774910511733,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\supabase.ts",
+      "accessCount": 8,
+      "lastAccessed": 1774911607709,
       "type": "file"
     },
     {
@@ -189,27 +207,9 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\APIClient.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1774901163068,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\api.ts",
-      "accessCount": 7,
-      "lastAccessed": 1774901177139,
-      "type": "file"
-    },
-    {
       "path": "src\\pages\\EdgeCalculator.tsx",
       "accessCount": 7,
       "lastAccessed": 1774901303961,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\supabase.ts",
-      "accessCount": 6,
-      "lastAccessed": 1774900596006,
       "type": "file"
     },
     {
@@ -219,16 +219,16 @@
       "type": "file"
     },
     {
+      "path": "src",
+      "accessCount": 6,
+      "lastAccessed": 1774911606823,
+      "type": "directory"
+    },
+    {
       "path": "src\\pages\\Landing.tsx",
       "accessCount": 5,
       "lastAccessed": 1774901666163,
       "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 4,
-      "lastAccessed": 1774900605141,
-      "type": "directory"
     },
     {
       "path": "src\\main.tsx",
@@ -237,16 +237,22 @@
       "type": "file"
     },
     {
+      "path": "supabase\\functions\\claude-proxy\\index.ts",
+      "accessCount": 4,
+      "lastAccessed": 1774910645170,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\types.ts",
+      "accessCount": 4,
+      "lastAccessed": 1774911607303,
+      "type": "file"
+    },
+    {
       "path": "",
       "accessCount": 3,
       "lastAccessed": 1774900496186,
       "type": "directory"
-    },
-    {
-      "path": "src\\lib\\types.ts",
-      "accessCount": 3,
-      "lastAccessed": 1774901023442,
-      "type": "file"
     },
     {
       "path": "src\\components\\EventSearchInput.tsx",
@@ -264,12 +270,6 @@
       "path": "supabase\\schema.sql",
       "accessCount": 3,
       "lastAccessed": 1774904729510,
-      "type": "file"
-    },
-    {
-      "path": "supabase\\functions\\claude-proxy\\index.ts",
-      "accessCount": 3,
-      "lastAccessed": 1774905052621,
       "type": "file"
     },
     {
@@ -315,6 +315,24 @@
       "type": "file"
     },
     {
+      "path": "supabase\\functions\\deep-research\\index.ts",
+      "accessCount": 2,
+      "lastAccessed": 1774910498549,
+      "type": "file"
+    },
+    {
+      "path": "supabase\\functions\\deep-research\\deno.json",
+      "accessCount": 2,
+      "lastAccessed": 1774910503123,
+      "type": "file"
+    },
+    {
+      "path": ".env",
+      "accessCount": 2,
+      "lastAccessed": 1774910533065,
+      "type": "file"
+    },
+    {
       "path": "tsconfig.json",
       "accessCount": 1,
       "lastAccessed": 1774899171904,
@@ -324,12 +342,6 @@
       "path": "tsconfig.app.json",
       "accessCount": 1,
       "lastAccessed": 1774899230860,
-      "type": "file"
-    },
-    {
-      "path": ".env",
-      "accessCount": 1,
-      "lastAccessed": 1774899232953,
       "type": "file"
     },
     {
@@ -375,27 +387,27 @@
       "type": "file"
     },
     {
-      "path": "supabase\\functions\\deep-research\\index.ts",
-      "accessCount": 1,
-      "lastAccessed": 1774901154549,
-      "type": "file"
-    },
-    {
       "path": "supabase\\functions\\claude-proxy\\deno.json",
       "accessCount": 1,
       "lastAccessed": 1774905061523,
       "type": "file"
     },
     {
-      "path": "supabase\\functions\\deep-research\\deno.json",
-      "accessCount": 1,
-      "lastAccessed": 1774905065756,
-      "type": "file"
-    },
-    {
       "path": "supabase\\functions\\event-search\\deno.json",
       "accessCount": 1,
       "lastAccessed": 1774905066978,
+      "type": "file"
+    },
+    {
+      "path": "supabase\\config.toml",
+      "accessCount": 1,
+      "lastAccessed": 1774910522924,
+      "type": "file"
+    },
+    {
+      "path": "supabase\\.env",
+      "accessCount": 1,
+      "lastAccessed": 1774910525906,
       "type": "file"
     }
   ],
