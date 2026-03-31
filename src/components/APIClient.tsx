@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js'
 import type { ModelTier } from '../lib/prompts'
 import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
 
@@ -24,16 +25,6 @@ type LLMResponsePayload = {
   output_text?: string
 }
 
-async function getAccessToken(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session) {
-    throw new Error('Not authenticated')
-  }
-
-  return session.access_token
-}
-
 function extractText(value: string | LLMContentBlock[] | undefined): string {
   if (typeof value === 'string') {
     return value
@@ -49,16 +40,21 @@ function extractText(value: string | LLMContentBlock[] | undefined): string {
   return ''
 }
 
-function getFunctionErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
+async function buildFunctionError(error: Error, functionName: string): Promise<Error> {
+  if (error instanceof FunctionsHttpError) {
+    let detail: string
+    try {
+      const body = await error.context.json()
+      detail = body?.error || body?.message || JSON.stringify(body)
+    } catch {
+      detail = error.message
+    }
+    return new Error(`${functionName} (${error.context.status}): ${detail}`)
   }
-
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message
+  if (error instanceof FunctionsRelayError) {
+    return new Error(`${functionName} relay error: ${error.message}`)
   }
-
-  return 'Unknown edge function error'
+  return new Error(`${functionName}: ${error.message}`)
 }
 
 function normalizeLLMResponse(data: LLMResponsePayload | null): string {
@@ -89,17 +85,11 @@ export async function callLLM({
   maxTokens = 4000,
   searchQueries = [],
 }: CallOptions): Promise<string> {
-  const accessToken = await getAccessToken()
   const { data, error } = await supabase.functions.invoke<LLMResponsePayload>('claude-proxy', {
     body: { prompt, modelTier, maxTokens, searchQueries },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
   })
 
-  if (error) {
-    throw new Error(getFunctionErrorMessage(error))
-  }
+  if (error) throw await buildFunctionError(error, 'claude-proxy')
 
   const text = normalizeLLMResponse(data)
   if (!text) {
@@ -119,18 +109,11 @@ export async function callClaude(prompt: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export async function searchEvents(query: string): Promise<EventSearchResult[]> {
-  const accessToken = await getAccessToken()
   const { data, error } = await supabase.functions.invoke<EventSearchResult[]>('event-search', {
     body: { query },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
   })
 
-  if (error) {
-    throw new Error(getFunctionErrorMessage(error))
-  }
-
+  if (error) throw await buildFunctionError(error, 'event-search')
   return data ?? []
 }
 
@@ -149,17 +132,11 @@ export interface DeepResearchResponse {
 }
 
 export async function callDeepResearch(options: DeepResearchRequest): Promise<DeepResearchResponse> {
-  const accessToken = await getAccessToken()
   const { data, error } = await supabase.functions.invoke<DeepResearchResponse>('deep-research', {
     body: options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
   })
 
-  if (error) {
-    throw new Error(getFunctionErrorMessage(error))
-  }
+  if (error) throw await buildFunctionError(error, 'deep-research')
 
   if (!data) {
     throw new Error('Deep research returned no data')
