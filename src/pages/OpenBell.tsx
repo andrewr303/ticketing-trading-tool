@@ -3,8 +3,6 @@ import { callClaude } from "../components/APIClient";
 import { SAMPLE_BRIEF } from "../lib/sampleData";
 import type { BriefData, PriorityEvent, OnSale, SocialSignal } from "../lib/types";
 import {
-  Clock,
-  TrendingUp,
   AlertTriangle,
   Copy,
   Check,
@@ -17,7 +15,6 @@ import {
   Zap,
   Radio,
   Target,
-  Shield,
   CalendarClock,
 } from "lucide-react";
 
@@ -259,6 +256,7 @@ const labelStyle: React.CSSProperties = {
 export default function OpenBell() {
   const [brief, setBrief] = useState<BriefData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"brief" | "events" | "signals">(
     "brief"
   );
@@ -338,8 +336,8 @@ Include 5-7 priority events, 2-3 on-sales, 3-4 social signals, 1-2 risk alerts, 
       const raw = await callClaude(prompt, true);
       const parsed: BriefData = JSON.parse(raw);
       setBrief(parsed);
-    } catch {
-      setBrief(SAMPLE_BRIEF);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate brief. Check your API key.");
     } finally {
       setLoading(false);
     }
@@ -556,8 +554,16 @@ Include 5-7 priority events, 2-3 on-sales, 3-4 social signals, 1-2 risk alerts, 
           </div>
         )}
 
+        {/* ERROR STATE */}
+        {error && (
+          <div className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+            <p className="font-semibold mb-1">Brief generation failed</p>
+            <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+          </div>
+        )}
+
         {/* EMPTY STATE */}
-        {!loading && !brief && (
+        {!loading && !brief && !error && (
           <div
             className="flex flex-col items-center justify-center gap-4"
             style={{ minHeight: 400 }}

@@ -64,6 +64,7 @@ export default function EdgeCalculator() {
   const [form, setForm] = useState<AnalysisInput>({ event: '', venue: '', date: '', buyPrice: 0, tier: 'Floor/VIP', quantity: 2, category: 'Concert' });
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('overview');
   const verdictRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +77,7 @@ export default function EdgeCalculator() {
   const analyze = async () => {
     if (!form.event || !form.buyPrice) return;
     setLoading(true);
+    setError(null);
     try {
       const prompt = `You are a senior ticket market analyst. Analyze this potential ticket purchase:
 Event: ${form.event}, Venue: ${form.venue}, Date: ${form.date}, Buy Price: $${form.buyPrice}, Section: ${form.tier}, Quantity: ${form.quantity}, Category: ${form.category}
@@ -89,8 +91,8 @@ Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 dem
       const raw = await callClaude(prompt, true);
       const parsed: Analysis = JSON.parse(raw);
       setAnalysis(parsed);
-    } catch {
-      setAnalysis(SAMPLE_ANALYSIS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Analysis failed. Check your API key and try again.");
     } finally {
       setLoading(false);
       setTimeout(() => verdictRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -177,6 +179,14 @@ Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 dem
           <button onClick={loadDemo} className="px-4 py-2.5 rounded text-sm border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)', background: 'transparent' }}>Load demo</button>
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div ref={verdictRef} className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+          <p className="font-semibold mb-1">Analysis failed</p>
+          <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+        </div>
+      )}
 
       {/* Results */}
       {analysis && (

@@ -1,26 +1,42 @@
-export async function callClaude(prompt: string, useWebSearch: boolean = true) {
-  const body: Record<string, unknown> = {
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 4000,
-    messages: [{ role: "user", content: prompt }],
-  };
-  if (useWebSearch) {
-    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL = "google/gemini-flash-2.5";
+
+export async function callClaude(prompt: string, useWebSearch: boolean = false): Promise<string> {
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing VITE_OPENROUTER_API_KEY. Add it to your .env file."
+    );
   }
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+
+  const model = useWebSearch ? `${DEFAULT_MODEL}:online` : DEFAULT_MODEL;
+
+  const response = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": import.meta.env.VITE_CLAUDE_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "Ticket Trading AI Suite",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      model,
+      max_tokens: 4000,
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`OpenRouter ${response.status}: ${body || response.statusText}`);
+  }
+
   const data = await response.json();
-  const text = data.content
-    .filter((c: { type: string }) => c.type === "text")
-    .map((c: { text: string }) => c.text)
-    .join("");
-  return text.replace(/```json\s*|```\s*/g, "").trim();
+
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) {
+    throw new Error("OpenRouter returned an empty response");
+  }
+
+  return text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
 }

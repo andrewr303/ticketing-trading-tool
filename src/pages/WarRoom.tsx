@@ -75,7 +75,7 @@ export default function WarRoom() {
   const [sortBy, setSortBy] = useState<string>('risk');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPos, setNewPos] = useState({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert' as const, priceTrend: 'stable' as const });
+  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: "concert" | "sports" | "theater"; priceTrend: "rising" | "stable" | "declining" }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
 
   const positionsWithRisk = useMemo(() => positions.map(p => ({ ...p, risk: calculateRisk(p) })), [positions]);
 
@@ -306,7 +306,7 @@ export default function WarRoom() {
               ))}
               <div>
                 <label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label>
-                <select value={newPos.category} onChange={e => setNewPos({ ...newPos, category: e.target.value as Position['category'] })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                <select value={newPos.category} onChange={e => setNewPos({ ...newPos, category: e.target.value as "concert" | "sports" | "theater" })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
                   <option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option>
                 </select>
               </div>

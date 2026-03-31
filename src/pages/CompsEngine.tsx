@@ -383,6 +383,7 @@ export default function CompsEngine() {
   });
   const [result, setResult] = useState<CompResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadDemo = () => {
     setForm({
@@ -398,6 +399,7 @@ export default function CompsEngine() {
   const handleSearch = async () => {
     if (!form.event.trim()) return;
     setLoading(true);
+    setError(null);
     setResult(null);
     try {
       const prompt = `You are a ticket resale comparable-event analyst. Given the search input, return a JSON object matching this TypeScript type exactly (no markdown, no explanation, ONLY valid JSON):
@@ -425,7 +427,7 @@ Use real historical ticket resale data where possible. For pricing, reference ac
       const parsed: CompResult = JSON.parse(raw);
       setResult(parsed);
     } catch (err) {
-      console.error('Comp search failed:', err);
+      setError(err instanceof Error ? err.message : "Comp search failed. Check your API key.");
     } finally {
       setLoading(false);
     }
@@ -572,7 +574,15 @@ Use real historical ticket resale data where possible. For pricing, reference ac
       {/* ============================================================ */}
       {/*  EMPTY STATE                                                 */}
       {/* ============================================================ */}
-      {!result && !loading && (
+      {/* ERROR STATE */}
+      {error && (
+        <div className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+          <p className="font-semibold mb-1">Comp search failed</p>
+          <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+        </div>
+      )}
+
+      {!result && !loading && !error && (
         <div className="text-center py-20">
           <BarChart3 size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
           <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
@@ -775,7 +785,7 @@ Use real historical ticket resale data where possible. For pricing, reference ac
                     }}
                     labelStyle={{ color: '#9ca3af' }}
                     itemStyle={{ fontFamily: 'monospace' }}
-                    formatter={(value: number) => [`$${value}`, undefined]}
+                    formatter={(value) => [`$${value}`, undefined]}
                   />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
                   <ReferenceLine

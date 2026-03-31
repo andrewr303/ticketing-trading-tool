@@ -58,10 +58,11 @@ export default function RadarPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [signalData, setSignalData] = useState<Record<string, SignalAnalysis>>(SAMPLE_SIGNALS);
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+  const [errorMap, setErrorMap] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('score');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', category: 'concert' as const, eventDate: '', venue: '' });
+  const [newEvent, setNewEvent] = useState<{ name: string; category: "concert" | "sports" | "theater"; eventDate: string; venue: string }>({ name: '', category: 'concert', eventDate: '', venue: '' });
 
   const filtered = useMemo(() => {
     let result = [...watchlist];
@@ -85,6 +86,7 @@ export default function RadarPage() {
 
   const analyzeEvent = async (event: WatchlistEvent) => {
     setLoadingMap(m => ({ ...m, [event.id]: true }));
+    setErrorMap(m => ({ ...m, [event.id]: '' }));
     try {
       const prompt = `Analyze current demand signals for this live event:
 Event: ${event.name}, Venue: ${event.venue}, Date: ${event.eventDate}, Category: ${event.category}
@@ -99,10 +101,9 @@ Be specific about numbers and sources.`;
       const parsed: SignalAnalysis = JSON.parse(raw);
       setSignalData(d => ({ ...d, [event.id]: parsed }));
       setWatchlist(wl => wl.map(e => e.id === event.id ? { ...e, demandScore: parsed.demand_score, trend: parsed.trend, lastAnalyzed: new Date().toISOString() } : e));
-    } catch {
-      if (!signalData[event.id]) {
-        setSignalData(d => ({ ...d, [event.id]: SAMPLE_SIGNALS.w1 }));
-      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Analysis failed";
+      setErrorMap(m => ({ ...m, [event.id]: detail }));
     } finally {
       setLoadingMap(m => ({ ...m, [event.id]: false }));
     }
@@ -198,6 +199,11 @@ Be specific about numbers and sources.`;
                 >
                   {isLoading ? <><Loader2 size={12} className="animate-spin" /> Analyzing...</> : <><RefreshCw size={12} /> {event.demandScore != null ? 'Re-analyze' : 'Analyze'}</>}
                 </button>
+                {errorMap[event.id] && (
+                  <div className="mt-2 text-xs rounded px-2 py-1" style={{ background: '#451a1a', color: '#f87171' }}>
+                    {errorMap[event.id]}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -266,7 +272,7 @@ Be specific about numbers and sources.`;
             <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Add to Watchlist</h3>
             <div className="space-y-3 mb-4">
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Event Name</label><input value={newEvent.name} onChange={e => setNewEvent({ ...newEvent, name: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
-              <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label><select value={newEvent.category} onChange={e => setNewEvent({ ...newEvent, category: e.target.value as WatchlistEvent['category'] })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}><option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option></select></div>
+              <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label><select value={newEvent.category} onChange={e => setNewEvent({ ...newEvent, category: e.target.value as "concert" | "sports" | "theater" })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}><option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option></select></div>
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Event Date</label><input type="date" value={newEvent.eventDate} onChange={e => setNewEvent({ ...newEvent, eventDate: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Venue</label><input value={newEvent.venue} onChange={e => setNewEvent({ ...newEvent, venue: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
             </div>

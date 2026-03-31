@@ -228,7 +228,7 @@ function formatTime(): string {
 function renderMarkdown(text: string) {
   // Split into lines, then process inline markdown
   return text.split('\n').map((line, li) => {
-    const parts: (string | JSX.Element)[] = [];
+    const parts: (string | React.ReactElement)[] = [];
     // bold
     const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
     let last = 0;
@@ -639,13 +639,14 @@ export default function TradeBot() {
         timestamp: formatTime(),
       };
       setMessages((prev) => [...prev, botMsg]);
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Unknown error";
       const errMsg: Message = {
         id: crypto.randomUUID(),
         user: 'TradeBot',
         avatar: 'TB',
         isBot: true,
-        content: '**Error:** Could not reach the analysis engine. Please try again.',
+        content: `**Error:** ${detail}`,
         timestamp: formatTime(),
       };
       setMessages((prev) => [...prev, errMsg]);
