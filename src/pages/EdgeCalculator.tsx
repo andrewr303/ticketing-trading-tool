@@ -158,7 +158,7 @@ export default function EdgeCalculator() {
       const parsed: Analysis = JSON.parse(raw);
       setAnalysis(parsed);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed. Check that API keys are configured in Supabase.');
+      setError(err instanceof Error ? err.message : "Analysis failed. Check your API key and try again.");
     } finally {
       setLoading(false);
       setTimeout(() => verdictRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -244,6 +244,14 @@ export default function EdgeCalculator() {
           <button onClick={loadDemo} className="px-4 py-2.5 rounded text-sm border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)', background: 'transparent' }}>Load demo</button>
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div ref={verdictRef} className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+          <p className="font-semibold mb-1">Analysis failed</p>
+          <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+        </div>
+      )}
 
       {/* Results */}
       {analysis && (

@@ -1,7 +1,7 @@
 {
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd c:/dev/ticketing-trading-tool && gh pr create --base claude/ticket-trading-ai-tools-0XB8B --title \\\"Deep Research event discovery + Edge Calculator event search\\\" --body \\\"$(cat <<'EOF'...",
-  "error": "Exit code 1\nWarning: 3 uncommitted changes\na pull request for branch \"feature/supabase-integration\" into branch \"claude/ticket-trading-ai-tools-0XB8B\" already exists:\nhttps://github.com/andrewr303/ticketing-trading-tool/pull/6",
-  "timestamp": "2026-03-30T21:22:19.988Z",
-  "retry_count": 1
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"C:\\\\dev\\\\ticketing-trading-tool\\\\src\\\\pages\\\\OpenBell.tsx\"}",
+  "error": "File content (20353 tokens) exceeds maximum allowed tokens (10000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
+  "timestamp": "2026-03-31T20:29:48.763Z",
+  "retry_count": 2
 }

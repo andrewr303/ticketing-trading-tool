@@ -172,8 +172,8 @@
   "hotPaths": [
     {
       "path": "src\\pages\\OpenBell.tsx",
-      "accessCount": 22,
-      "lastAccessed": 1774901619324,
+      "accessCount": 30,
+      "lastAccessed": 1774989272764,
       "type": "file"
     },
     {
@@ -183,15 +183,27 @@
       "type": "file"
     },
     {
-      "path": "src\\App.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1774900596975,
+      "path": "src\\lib\\prompts.ts",
+      "accessCount": 10,
+      "lastAccessed": 1774989025298,
       "type": "file"
     },
     {
       "path": "src\\components\\APIClient.tsx",
+      "accessCount": 9,
+      "lastAccessed": 1774989207116,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\EdgeCalculator.tsx",
+      "accessCount": 9,
+      "lastAccessed": 1774989214991,
+      "type": "file"
+    },
+    {
+      "path": "src\\App.tsx",
       "accessCount": 7,
-      "lastAccessed": 1774901163068,
+      "lastAccessed": 1774900596975,
       "type": "file"
     },
     {
@@ -201,9 +213,9 @@
       "type": "file"
     },
     {
-      "path": "src\\pages\\EdgeCalculator.tsx",
+      "path": "src\\lib\\types.ts",
       "accessCount": 7,
-      "lastAccessed": 1774901303961,
+      "lastAccessed": 1774989044553,
       "type": "file"
     },
     {
@@ -213,21 +225,21 @@
       "type": "file"
     },
     {
-      "path": "src\\lib\\prompts.ts",
-      "accessCount": 6,
-      "lastAccessed": 1774900604613,
-      "type": "file"
-    },
-    {
       "path": "src\\pages\\Landing.tsx",
       "accessCount": 5,
       "lastAccessed": 1774901666163,
       "type": "file"
     },
     {
+      "path": "src\\pages\\CompsEngine.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1774989249918,
+      "type": "directory"
+    },
+    {
       "path": "src",
-      "accessCount": 4,
-      "lastAccessed": 1774900605141,
+      "accessCount": 5,
+      "lastAccessed": 1774989289877,
       "type": "directory"
     },
     {
@@ -237,16 +249,28 @@
       "type": "file"
     },
     {
+      "path": "src\\pages\\Radar.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1774989247107,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\WarRoom.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1774989281296,
+      "type": "directory"
+    },
+    {
+      "path": ".env.example",
+      "accessCount": 4,
+      "lastAccessed": 1774989290334,
+      "type": "file"
+    },
+    {
       "path": "",
       "accessCount": 3,
       "lastAccessed": 1774900496186,
       "type": "directory"
-    },
-    {
-      "path": "src\\lib\\types.ts",
-      "accessCount": 3,
-      "lastAccessed": 1774901023442,
-      "type": "file"
     },
     {
       "path": "src\\components\\EventSearchInput.tsx",
@@ -270,6 +294,12 @@
       "path": "supabase\\functions\\claude-proxy\\index.ts",
       "accessCount": 3,
       "lastAccessed": 1774905052621,
+      "type": "file"
+    },
+    {
+      "path": "src\\pages\\TradeBot.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1774989222462,
       "type": "file"
     },
     {
@@ -333,18 +363,6 @@
       "type": "file"
     },
     {
-      "path": ".env.example",
-      "accessCount": 1,
-      "lastAccessed": 1774899233361,
-      "type": "file"
-    },
-    {
-      "path": "src\\pages\\TradeBot.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1774899340449,
-      "type": "file"
-    },
-    {
       "path": "tsconfig.node.json",
       "accessCount": 1,
       "lastAccessed": 1774899470068,
@@ -355,12 +373,6 @@
       "accessCount": 1,
       "lastAccessed": 1774900479059,
       "type": "directory"
-    },
-    {
-      "path": "src\\pages\\Radar.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1774900489512,
-      "type": "file"
     },
     {
       "path": "src\\lib\\venueTiers.ts",

@@ -50,6 +50,7 @@ export default function RadarPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [signalData, setSignalData] = useState<Record<string, SignalAnalysis>>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+  const [errorMap, setErrorMap] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('score');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -77,6 +78,7 @@ export default function RadarPage() {
 
   const analyzeEvent = async (event: WatchlistEvent) => {
     setLoadingMap(m => ({ ...m, [event.id]: true }));
+    setErrorMap(m => ({ ...m, [event.id]: '' }));
     try {
       const date = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
       const input = { event: event.name, venue: event.venue, eventDate: event.eventDate, category: event.category };
@@ -90,8 +92,9 @@ export default function RadarPage() {
       setSignalData(d => ({ ...d, [event.id]: parsed }));
       setWatchlist(wl => wl.map(e => e.id === event.id ? updated : e));
       upsertWatchlistItem(updated).catch(console.error);
-    } catch {
-      // Show error state - don't silently load demo data
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Analysis failed";
+      setErrorMap(m => ({ ...m, [event.id]: detail }));
     } finally {
       setLoadingMap(m => ({ ...m, [event.id]: false }));
     }
@@ -203,6 +206,11 @@ export default function RadarPage() {
                 >
                   {isLoading ? <><Loader2 size={12} className="animate-spin" /> Analyzing...</> : <><RefreshCw size={12} /> {event.demandScore != null ? 'Re-analyze' : 'Analyze'}</>}
                 </button>
+                {errorMap[event.id] && (
+                  <div className="mt-2 text-xs rounded px-2 py-1" style={{ background: '#451a1a', color: '#f87171' }}>
+                    {errorMap[event.id]}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -271,7 +279,7 @@ export default function RadarPage() {
             <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Add to Watchlist</h3>
             <div className="space-y-3 mb-4">
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Event Name</label><input value={newEvent.name} onChange={e => setNewEvent({ ...newEvent, name: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
-              <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label><select value={newEvent.category} onChange={e => setNewEvent({ ...newEvent, category: e.target.value as WatchlistEvent['category'] })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}><option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option></select></div>
+              <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label><select value={newEvent.category} onChange={e => setNewEvent({ ...newEvent, category: e.target.value as "concert" | "sports" | "theater" })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}><option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option></select></div>
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Event Date</label><input type="date" value={newEvent.eventDate} onChange={e => setNewEvent({ ...newEvent, eventDate: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
               <div><label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Venue</label><input value={newEvent.venue} onChange={e => setNewEvent({ ...newEvent, venue: e.target.value })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} /></div>
             </div>

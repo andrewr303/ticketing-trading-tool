@@ -678,13 +678,14 @@ export default function TradeBot() {
         ...prev,
         [activeChannel]: [...(prev[activeChannel] || []), botMsg]
       }));
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Unknown error";
       const errMsg: Message = {
         id: crypto.randomUUID(),
         user: 'TradeBot',
         avatar: 'TB',
         isBot: true,
-        content: '**Error:** Could not reach the analysis engine. Please try again.',
+        content: `**Error:** ${detail}`,
         timestamp: formatTime(),
       };
       setChannelMessages((prev) => ({

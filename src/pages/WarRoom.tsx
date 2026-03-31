@@ -505,7 +505,7 @@ export default function WarRoom() {
               ))}
               <div>
                 <label className="block mb-1 text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Category</label>
-                <select value={newPos.category} onChange={e => setNewPos({ ...newPos, category: e.target.value as Position['category'] })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
+                <select value={newPos.category} onChange={e => setNewPos({ ...newPos, category: e.target.value as "concert" | "sports" | "theater" })} className="w-full rounded px-3 py-2 text-sm border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
                   <option value="concert">Concert</option><option value="sports">Sports</option><option value="theater">Theater</option>
                 </select>
               </div>

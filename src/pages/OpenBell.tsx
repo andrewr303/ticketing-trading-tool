@@ -337,7 +337,7 @@ export default function OpenBell() {
       setBrief(parsed);
       saveBrief(parsed).catch(() => {});
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate brief.");
+      setError(err instanceof Error ? err.message : "Failed to generate brief. Check your API key.");
     } finally {
       setBriefLoading(false);
     }
@@ -559,6 +559,14 @@ export default function OpenBell() {
               <button onClick={generateResearch} className="text-sm px-4 py-2 rounded" style={{ background: "#059669", color: "#fff" }}>Retry</button>
               <button onClick={loadDemo} className="text-sm px-4 py-2 rounded border" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>Load demo brief</button>
             </div>
+          </div>
+        )}
+
+        {/* ERROR STATE */}
+        {error && (
+          <div className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+            <p className="font-semibold mb-1">Brief generation failed</p>
+            <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
           </div>
         )}
 

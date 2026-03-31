@@ -431,6 +431,7 @@ export default function CompsEngine() {
   const handleSearch = async () => {
     if (!form.event.trim()) return;
     setLoading(true);
+    setError(null);
     setResult(null);
     setError(null);
     try {
@@ -464,7 +465,7 @@ export default function CompsEngine() {
       const parsed: CompResult = JSON.parse(raw);
       setResult(parsed);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Comp search failed. Check that API keys are configured in Supabase.');
+      setError(err instanceof Error ? err.message : "Comp search failed. Check your API key.");
     } finally {
       setLoading(false);
     }
@@ -625,6 +626,14 @@ export default function CompsEngine() {
       {/* ============================================================ */}
       {/*  EMPTY STATE                                                 */}
       {/* ============================================================ */}
+      {/* ERROR STATE */}
+      {error && (
+        <div className="rounded-lg border p-4 mb-4" style={{ background: '#451a1a', borderColor: '#f8717140', color: '#f87171' }}>
+          <p className="font-semibold mb-1">Comp search failed</p>
+          <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+        </div>
+      )}
+
       {!result && !loading && !error && (
         <div className="text-center py-20">
           <BarChart3 size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />

@@ -1,5 +1,8 @@
-import { supabase } from '../lib/supabase'
 import type { ModelTier } from '../lib/prompts'
+import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL = "google/gemini-flash-2.5";
 
 interface CallOptions {
   prompt: string
@@ -10,73 +13,67 @@ interface CallOptions {
 
 export async function callLLM({
   prompt,
-  modelTier = 'standard',
+  modelTier: _modelTier = 'standard',
   maxTokens = 4000,
   searchQueries = [],
 }: CallOptions): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session) {
-    throw new Error('Not authenticated')
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing VITE_OPENROUTER_API_KEY. Add it to your .env file."
+    );
   }
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claude-proxy`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ prompt, modelTier, maxTokens, searchQueries }),
-    }
-  )
+  const useWebSearch = searchQueries.length > 0;
+  const model = useWebSearch ? `${DEFAULT_MODEL}:online` : DEFAULT_MODEL;
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "Ticket Trading AI Suite",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
+    const body = await response.text().catch(() => "");
+    throw new Error(`OpenRouter ${response.status}: ${body || response.statusText}`);
   }
 
-  const data = await response.json()
-  const text = data.content
-    .filter((c: { type: string }) => c.type === 'text')
-    .map((c: { text: string }) => c.text)
-    .join('')
-  return text.replace(/```json\s*|```\s*/g, '').trim()
+  const data = await response.json();
+
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) {
+    throw new Error("OpenRouter returned an empty response");
+  }
+
+  return text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
 }
 
 // Backward-compatible wrapper for pages that haven't migrated yet
-export async function callClaude(prompt: string): Promise<string> {
-  return callLLM({ prompt, modelTier: 'standard', searchQueries: [] })
+export async function callClaude(prompt: string, useWebSearch: boolean = false): Promise<string> {
+  return callLLM({ prompt, searchQueries: useWebSearch ? [''] : [] })
 }
 
 // ---------------------------------------------------------------------------
-// Event Search (lightweight — no LLM, just You.com search + parsing)
+// Event Search (lightweight — uses OpenRouter with search prompt)
 // ---------------------------------------------------------------------------
-
-import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
 
 export async function searchEvents(query: string): Promise<EventSearchResult[]> {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
-
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/event-search`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ query }),
-    }
-  )
-
-  if (!response.ok) throw new Error(`Search error: ${response.status}`)
-  return response.json()
+  const prompt = `Search for upcoming live events matching: "${query}". Return a JSON array of objects with fields: id (string), name (string), venue (string), date (string ISO), category ("concert"|"sports"|"theater"|"comedy"|"festival"|"other"), source (string), url (string, optional), price_range (string, optional). Return only the JSON array, no other text.`;
+  const raw = await callLLM({ prompt, searchQueries: [query] });
+  return JSON.parse(raw);
 }
 
 // ---------------------------------------------------------------------------
-// Deep Research (multi-phase: search → research → LLM synthesis)
+// Deep Research (multi-phase: search + LLM synthesis via OpenRouter)
 // ---------------------------------------------------------------------------
 
 export interface DeepResearchResponse {
@@ -90,21 +87,43 @@ export interface DeepResearchResponse {
 }
 
 export async function callDeepResearch(options: DeepResearchRequest): Promise<DeepResearchResponse> {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  const startTime = Date.now();
+  const regions = options.regions?.join(', ') || 'nationwide';
+  const categories = options.categories?.length ? options.categories.join(', ') : 'all categories';
+  const dateRange = options.dateRange || 'next_2_weeks';
 
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deep-research`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(options),
-    }
-  )
+  const searchQueries = [
+    `upcoming ${categories} events ${regions} tickets ${dateRange.replace(/_/g, ' ')}`,
+    `ticket resale market trends ${regions} 2026`,
+    `live event on-sale dates this week ${regions}`,
+  ];
 
-  if (!response.ok) throw new Error(`Deep research error: ${response.status}`)
-  return response.json()
+  const prompt = `You are a ticket market research analyst. Research upcoming live events for the ${regions} market, focusing on ${categories} in the ${dateRange.replace(/_/g, ' ')} timeframe. Effort level: ${options.effortLevel || 'standard'}.
+
+Return a JSON object matching this structure exactly:
+{
+  "generated_at": "ISO timestamp",
+  "market_overview": "string",
+  "discovered_events": [{ "event_name": "", "artist_or_team": "", "event_date": "", "venue": "", "city": "", "state": "", "category": "", "edge_score": 0, "demand_score": 0, "supply_score": 0, "roi_score": 0, "timing_score": 0, "inefficiency_score": 0, "face_value_range": "", "secondary_floor": 0, "secondary_median": 0, "inventory_level": "moderate", "sell_through_pct": 0, "price_velocity": "stable", "action": "WATCH", "reasoning": "", "key_signals": [], "risk_factors": [] }],
+  "signal_dashboard": { "social": [], "streaming": [], "search": [], "news": [] },
+  "on_sales": [{ "event_name": "", "date": "", "time": "", "platform": "", "profit_potential": "medium", "notes": "" }],
+  "risk_alerts": [{ "severity": "medium", "title": "", "description": "", "affected_events": [] }],
+  "sources": [{ "title": "", "url": "", "snippet": "" }],
+  "recommended_focus": ""
+}
+
+Return only the JSON, no other text.`;
+
+  const raw = await callLLM({ prompt, modelTier: 'advanced', maxTokens: 8000, searchQueries });
+  const result: DeepResearchResult = JSON.parse(raw);
+
+  return {
+    result,
+    metadata: {
+      search_queries_run: searchQueries.length,
+      research_effort: options.effortLevel || 'standard',
+      total_sources: result.sources?.length || 0,
+      generation_time_ms: Date.now() - startTime,
+    },
+  };
 }
