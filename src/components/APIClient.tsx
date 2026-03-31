@@ -15,7 +15,7 @@ export async function callLLM({
   prompt,
   modelTier: _modelTier = 'standard',
   maxTokens = 4000,
-  searchQueries = [],
+  searchQueries: _searchQueries = [],
 }: CallOptions): Promise<string> {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -23,9 +23,6 @@ export async function callLLM({
       "Missing VITE_OPENROUTER_API_KEY. Add it to your .env file."
     );
   }
-
-  const useWebSearch = searchQueries.length > 0;
-  const model = useWebSearch ? `${DEFAULT_MODEL}:online` : DEFAULT_MODEL;
 
   const response = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -36,7 +33,7 @@ export async function callLLM({
       "X-Title": "Ticket Trading AI Suite",
     },
     body: JSON.stringify({
-      model,
+      model: DEFAULT_MODEL,
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
