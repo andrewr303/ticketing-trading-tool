@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-import { callClaude } from '../components/APIClient';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { callLLM } from '../components/APIClient';
+import { TRADEBOT_PROMPT } from '../lib/prompts';
 import type { Message } from '../lib/types';
 import {
   Hash,
@@ -590,13 +591,30 @@ function injectBounce() {
 /* ------------------------------------------------------------------ */
 
 export default function TradeBot() {
-  const [messages, setMessages] = useState<Message[]>(PRELOADED_MESSAGES);
+  const [activeChannel, setActiveChannel] = useState('morning-trading');
+  const [channelMessages, setChannelMessages] = useState<Record<string, Message[]>>(() => {
+    const saved = localStorage.getItem('tradebot_messages');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { 'morning-trading': PRELOADED_MESSAGES };
+      }
+    }
+    return { 'morning-trading': PRELOADED_MESSAGES };
+  });
+
+  const messages = useMemo(() => channelMessages[activeChannel] || [], [channelMessages, activeChannel]);
+
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeChannel, setActiveChannel] = useState('morning-trading');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('tradebot_messages', JSON.stringify(channelMessages));
+  }, [channelMessages]);
 
   useEffect(() => {
     injectBounce();
@@ -620,16 +638,34 @@ export default function TradeBot() {
       content: trimmed,
       timestamp: formatTime(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    setChannelMessages((prev) => ({
+      ...prev,
+      [activeChannel]: [...(prev[activeChannel] || []), userMsg]
+    }));
     setLoading(true);
 
     try {
-      const systemPrompt = `You are TradeBot, a ticket market trading assistant embedded in a Slack-style team channel. Keep responses under 150 words. Use **bold** for emphasis and key data points. Include specific numbers, prices, and percentages wherever possible. Use web search to get real, current data about events, ticket prices, and market conditions. Format your responses cleanly with line breaks for readability. Never use markdown headers (#). Use bullet points (•) for lists.`;
-
-      const raw = await callClaude(
-        `${systemPrompt}\n\nUser message: ${trimmed}`,
-        true,
-      );
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = { message: trimmed };
+      const searchQueries = typeof TRADEBOT_PROMPT.searchQueries === 'function'
+        ? TRADEBOT_PROMPT.searchQueries(input)
+        : TRADEBOT_PROMPT.searchQueries;
+      const prompt = TRADEBOT_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: TRADEBOT_PROMPT.model,
+        maxTokens: TRADEBOT_PROMPT.maxTokens,
+        searchQueries,
+      });
       const botMsg: Message = {
         id: crypto.randomUUID(),
         user: 'TradeBot',
@@ -638,7 +674,10 @@ export default function TradeBot() {
         content: raw,
         timestamp: formatTime(),
       };
-      setMessages((prev) => [...prev, botMsg]);
+      setChannelMessages((prev) => ({
+        ...prev,
+        [activeChannel]: [...(prev[activeChannel] || []), botMsg]
+      }));
     } catch (err) {
       const detail = err instanceof Error ? err.message : "Unknown error";
       const errMsg: Message = {
@@ -649,7 +688,10 @@ export default function TradeBot() {
         content: `**Error:** ${detail}`,
         timestamp: formatTime(),
       };
-      setMessages((prev) => [...prev, errMsg]);
+      setChannelMessages((prev) => ({
+        ...prev,
+        [activeChannel]: [...(prev[activeChannel] || []), errMsg]
+      }));
     } finally {
       setLoading(false);
     }
@@ -763,7 +805,7 @@ export default function TradeBot() {
 
         {/* Messages */}
         <div style={styles.messageList}>
-          {messages.map((msg) => (
+          {messages.map((msg: Message) => (
             <div
               key={msg.id}
               className="tb-msg-row"
@@ -791,7 +833,7 @@ export default function TradeBot() {
                 </div>
                 {msg.reactions && msg.reactions.length > 0 && (
                   <div style={styles.reactions}>
-                    {msg.reactions.map((r, i) => (
+                    {msg.reactions.map((r: { emoji: string; count: number }, i: number) => (
                       <span key={i} className="tb-reaction" style={styles.reactionPill}>
                         {r.emoji} {r.count}
                       </span>

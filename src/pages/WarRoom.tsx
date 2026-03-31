@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
-import { Shield, X, Plus, TrendingUp, TrendingDown, Minus, AlertTriangle, Search } from 'lucide-react';
-import { SAMPLE_POSITIONS } from '../lib/sampleData';
+import { useState, useMemo, useEffect } from 'react';
+import { Shield, X, Plus, TrendingUp, TrendingDown, Minus, AlertTriangle, Search, Loader2, Brain } from 'lucide-react';
+import { getPositions, upsertPosition } from '../lib/api';
+import { callLLM } from '../components/APIClient';
+import { WAR_ROOM_PROMPT } from '../lib/prompts';
 import type { Position, RiskScore } from '../lib/types';
 
 function calculateRisk(position: Position): RiskScore {
@@ -68,14 +70,22 @@ function getZoneBadge(zone: RiskScore['zone']) {
 }
 
 export default function WarRoom() {
-  const [positions, setPositions] = useState<Position[]>(SAMPLE_POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('risk');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: "concert" | "sports" | "theater"; priceTrend: "rising" | "stable" | "declining" }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
+  const [newPos, setNewPos] = useState<{ eventName: string; artistOrTeam: string; venue: string; eventDate: string; section: string; quantity: number; costPerTicket: number; currentMarketPrice: number; category: Position['category']; priceTrend: Position['priceTrend']; purchaseDate: string }>({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable', purchaseDate: '' });
+
+  useEffect(() => {
+    getPositions()
+      .then(data => setPositions(data))
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
+  }, []);
 
   const positionsWithRisk = useMemo(() => positions.map(p => ({ ...p, risk: calculateRisk(p) })), [positions]);
 
@@ -105,11 +115,56 @@ export default function WarRoom() {
   const thisWeekCount = positionsWithRisk.filter(p => { const d = Math.ceil((new Date(p.eventDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)); return d >= 0 && d <= 7; }).length;
   const biggestRisk = [...positionsWithRisk].sort((a, b) => b.risk.total - a.risk.total)[0];
 
-  const addPosition = () => {
-    const id = 'new-' + Date.now();
-    setPositions([...positions, { ...newPos, id, purchaseDate: new Date().toISOString().split('T')[0] }]);
-    setShowAddForm(false);
-    setNewPos({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable' });
+  const addPosition = async () => {
+    const purchaseDate = new Date().toISOString().split('T')[0];
+    const artistOrTeam = newPos.eventName.split('—')[0].trim();
+    const newItem: Omit<Position, 'id'> = { ...newPos, artistOrTeam, purchaseDate };
+    try {
+      await upsertPosition(newItem);
+      const data = await getPositions();
+      setPositions(data);
+      setShowAddForm(false);
+      setNewPos({ eventName: '', artistOrTeam: '', venue: '', eventDate: '', section: '', quantity: 2, costPerTicket: 0, currentMarketPrice: 0, category: 'concert', priceTrend: 'stable', purchaseDate: '' });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [portfolioAnalysis, setPortfolioAnalysis] = useState<any>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+
+  const analyzePortfolio = async () => {
+    setAnalyzing(true);
+    setShowAnalysis(true);
+    try {
+      const date = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      const posData = positionsWithRisk.map(p => ({
+        eventName: p.eventName, category: p.category, venue: p.venue, eventDate: p.eventDate,
+        daysToEvent: Math.ceil((new Date(p.eventDate).getTime() - Date.now()) / 86400000),
+        quantity: p.quantity, costPerTicket: p.costPerTicket, currentMarketPrice: p.currentMarketPrice,
+        totalCost: p.costPerTicket * p.quantity, totalMarketValue: p.currentMarketPrice * p.quantity,
+        plPerTicket: Math.round((p.currentMarketPrice * 0.85) - p.costPerTicket),
+        roiPct: Math.round(((p.currentMarketPrice * 0.85 - p.costPerTicket) / p.costPerTicket) * 100),
+        priceTrend: p.priceTrend, riskScore: p.risk.total, riskZone: p.risk.zone,
+      }));
+      const metricsStr = `Total positions: ${positions.length}\nTotal cost basis: $${totalCost.toLocaleString()}\nTotal market value: $${totalMarket.toLocaleString()}\nUnrealized P&L: $${totalPl.toLocaleString()} (${plPct.toFixed(1)}%)\nPositions in danger zone: ${dangerCount}`;
+      const prompt = WAR_ROOM_PROMPT.buildPrompt({
+        date, searchResults: "${searchResults}",
+        positionData: JSON.stringify(posData, null, 2),
+        metrics: metricsStr,
+      });
+      const searchQueries = typeof WAR_ROOM_PROMPT.searchQueries === 'function'
+        ? WAR_ROOM_PROMPT.searchQueries({})
+        : WAR_ROOM_PROMPT.searchQueries;
+      const raw = await callLLM({ prompt, modelTier: WAR_ROOM_PROMPT.model, maxTokens: WAR_ROOM_PROMPT.maxTokens, searchQueries });
+      setPortfolioAnalysis(JSON.parse(raw));
+    } catch {
+      setPortfolioAnalysis(null);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const filterBtn = (label: string, value: string, current: string, setter: (v: string) => void, color?: string) => (
@@ -120,6 +175,15 @@ export default function WarRoom() {
     }}>{label}</button>
   );
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: '#f59e0b' }} />
+        <span className="ml-2 text-sm" style={{ color: 'var(--text-muted)' }}>Loading positions...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -128,8 +192,22 @@ export default function WarRoom() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>War Room</h1>
           <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#f59e0b', color: '#000', fontSize: '10px' }}>BETA</span>
         </div>
-        <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}><Plus size={14} /> Add Position</button>
+        <div className="flex gap-2">
+          <button onClick={analyzePortfolio} disabled={analyzing || positions.length === 0} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: '#f59e0b40', color: '#fcd34d', background: '#78350f30' }}>
+            {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />} {analyzing ? 'Analyzing...' : 'Analyze Portfolio'}
+          </button>
+          <button onClick={() => setShowAddForm(true)} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}><Plus size={14} /> Add Position</button>
+        </div>
       </div>
+
+      {/* Empty State */}
+      {positions.length === 0 && (
+        <div className="text-center py-16">
+          <Shield size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
+          <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>No positions yet. Add your first position to start tracking risk.</p>
+          <button onClick={() => setShowAddForm(true)} className="mt-2 text-xs px-4 py-2 rounded" style={{ background: 'var(--accent-green)', color: '#fff' }}>Add Position</button>
+        </div>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
@@ -283,6 +361,127 @@ export default function WarRoom() {
           </div>
         )}
       </div>
+
+      {/* Portfolio Analysis Panel */}
+      {showAnalysis && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAnalysis(false)}>
+          <div className="rounded-lg border p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Brain size={18} style={{ color: '#f59e0b' }} />
+                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Portfolio Analysis</h3>
+              </div>
+              <button type="button" onClick={() => setShowAnalysis(false)}><X size={16} style={{ color: 'var(--text-muted)' }} /></button>
+            </div>
+
+            {analyzing && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 size={24} className="animate-spin" style={{ color: '#f59e0b' }} />
+                <span className="ml-2 text-sm" style={{ color: 'var(--text-muted)' }}>Analyzing {positions.length} positions...</span>
+              </div>
+            )}
+
+            {!analyzing && !portfolioAnalysis && (
+              <div className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
+                Analysis unavailable. Try again.
+              </div>
+            )}
+
+            {!analyzing && portfolioAnalysis && (
+              <div className="space-y-4 text-sm">
+                {/* Grade + Headline */}
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold" style={{ fontFamily: 'monospace', color: portfolioAnalysis.portfolio_health_grade?.startsWith('A') || portfolioAnalysis.portfolio_health_grade?.startsWith('B') ? '#10b981' : portfolioAnalysis.portfolio_health_grade?.startsWith('C') ? '#f59e0b' : '#ef4444' }}>
+                    {portfolioAnalysis.portfolio_health_grade}
+                  </span>
+                  <p style={{ color: 'var(--text-secondary)' }}>{portfolioAnalysis.headline}</p>
+                </div>
+
+                {/* Triage */}
+                {portfolioAnalysis.triage?.immediate?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#ef4444' }}>Immediate Action</div>
+                    {portfolioAnalysis.triage.immediate.map((t: { position: string; prescribed_action: string; financial_impact: string }, i: number) => (
+                      <div key={i} className="rounded p-3 mb-2" style={{ background: '#7f1d1d' }}>
+                        <div className="font-semibold" style={{ color: '#fca5a5' }}>{t.position}</div>
+                        <div style={{ color: '#fca5a5' }}>{t.prescribed_action}</div>
+                        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{t.financial_impact}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {portfolioAnalysis.triage?.this_week?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#f59e0b' }}>This Week</div>
+                    {portfolioAnalysis.triage.this_week.map((t: { position: string; prescribed_action: string; financial_impact: string }, i: number) => (
+                      <div key={i} className="rounded p-3 mb-2" style={{ background: '#78350f' }}>
+                        <div className="font-semibold" style={{ color: '#fcd34d' }}>{t.position}</div>
+                        <div style={{ color: '#fcd34d' }}>{t.prescribed_action}</div>
+                        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{t.financial_impact}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {portfolioAnalysis.triage?.monitor_count > 0 && (
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{portfolioAnalysis.triage.monitor_count} positions in monitor (no action needed)</div>
+                )}
+
+                {/* Exposure */}
+                {portfolioAnalysis.exposure_analysis?.concentration_verdict && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>Concentration</div>
+                    <p style={{ color: 'var(--text-secondary)' }}>{portfolioAnalysis.exposure_analysis.concentration_verdict}</p>
+                  </div>
+                )}
+
+                {/* Patterns */}
+                {portfolioAnalysis.patterns?.strengths?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: '#10b981' }}>Strengths</div>
+                    {portfolioAnalysis.patterns.strengths.map((s: { pattern: string; recommendation: string }, i: number) => (
+                      <div key={i} className="mb-1">
+                        <span style={{ color: 'var(--text-primary)' }}>{s.pattern}</span>
+                        <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>{s.recommendation}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {portfolioAnalysis.patterns?.weaknesses?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: '#ef4444' }}>Weaknesses</div>
+                    {portfolioAnalysis.patterns.weaknesses.map((w: { pattern: string; recommendation: string }, i: number) => (
+                      <div key={i} className="mb-1">
+                        <span style={{ color: 'var(--text-primary)' }}>{w.pattern}</span>
+                        <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>{w.recommendation}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Rebalancing */}
+                {portfolioAnalysis.rebalancing?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>Rebalancing</div>
+                    {portfolioAnalysis.rebalancing.map((r: { action: string; position: string; detail: string }, i: number) => (
+                      <div key={i} className="flex gap-2 mb-1">
+                        <span className="text-xs px-1.5 py-0.5 rounded" style={{
+                          background: r.action === 'EXIT' ? '#7f1d1d' : r.action === 'TRIM' ? '#78350f' : r.action === 'ADD' ? '#064e3b' : '#1f2937',
+                          color: r.action === 'EXIT' ? '#fca5a5' : r.action === 'TRIM' ? '#fcd34d' : r.action === 'ADD' ? '#6ee7b7' : '#9ca3af',
+                        }}>{r.action}</span>
+                        <span style={{ color: 'var(--text-primary)' }}>{r.position}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add Position Modal */}
       {showAddForm && (

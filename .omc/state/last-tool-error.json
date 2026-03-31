@@ -1,7 +1,7 @@
 {
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git branch --show-current && echo \\\"---\\\" && git log --oneline -10 && echo \\\"---\\\" && git status\",\"description\":\"Check current branch, recent commits, and status\"}",
-  "error": "Exit code 128\nmain\n---\nfatal: your current branch 'main' does not have any commits yet",
-  "timestamp": "2026-03-28T02:50:35.879Z",
-  "retry_count": 1
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"C:\\\\dev\\\\ticketing-trading-tool\\\\src\\\\pages\\\\OpenBell.tsx\"}",
+  "error": "File content (20353 tokens) exceeds maximum allowed tokens (10000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
+  "timestamp": "2026-03-31T20:29:48.763Z",
+  "retry_count": 2
 }

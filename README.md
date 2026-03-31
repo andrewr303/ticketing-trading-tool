@@ -1,73 +1,70 @@
-# React + TypeScript + Vite
+# Ticket Trading AI Tools
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+7 AI-powered tools for live event ticket trading, focused on the Denver/Colorado market.
 
-Currently, two official plugins are available:
+## Tools
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Open Bell** — AI morning trading brief for the 7:15 AM session
+- **Edge Calculator** — Event ROI predictor with comparable analysis
+- **TradeBot** — Slack-style AI trading assistant (natural language Q&A)
+- **War Room** — Inventory risk heatmap with AI portfolio analysis
+- **Comps Engine** — Comparable historical event finder
+- **The Radar** — Demand signal tracker across social, streaming, search, and news
+- **The Playbook** — Trade performance journal with AI coaching
 
-## React Compiler
+## Architecture
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+Frontend (React + Vite + Tailwind)
+  → callLLM() → Supabase Edge Function (claude-proxy)
+      → You.com API (real-time web search)
+      → OpenRouter API (LLM: MiniMax-M2.7 / GPT-5.4 mini)
+  → Supabase PostgreSQL (positions, trades, watchlist, briefs)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 1. Install dependencies
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+```
+
+### 2. Configure environment
+
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
+
+```bash
+cp .env.example .env
+```
+
+### 3. Configure Supabase secrets
+
+The AI features require two API keys set as **Supabase Edge Function secrets** (not in `.env`):
+
+1. Go to your Supabase Dashboard > Edge Functions > Secrets
+2. Add:
+   - `OPENROUTER_API_KEY` — Get one at https://openrouter.ai/keys
+   - `YOU_API_KEY` — Get one at https://api.you.com
+
+### 4. Deploy the edge function
+
+```bash
+supabase functions deploy claude-proxy
+```
+
+### 5. Run the database schema
+
+Apply `supabase/schema.sql` to your Supabase project to create the required tables.
+
+### 6. Run locally
+
+```bash
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
 ```

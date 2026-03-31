@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart3,
   Search,
@@ -23,7 +23,8 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import { callClaude } from '../components/APIClient';
+import { callLLM } from '../components/APIClient';
+import { COMPS_ENGINE_PROMPT } from '../lib/prompts';
 import type { CompResult, CompSearchInput, Comparable } from '../lib/types';
 
 /* ------------------------------------------------------------------ */
@@ -381,7 +382,38 @@ export default function CompsEngine() {
     category: 'concert',
     market: 'Denver',
   });
-  const [result, setResult] = useState<CompResult | null>(null);
+  const [result, setResult] = useState<CompResult | null>(() => {
+    const saved = localStorage.getItem('comps_engine_result');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (result) {
+      localStorage.setItem('comps_engine_result', JSON.stringify(result));
+    }
+  }, [result]);
+
+  useEffect(() => {
+    const savedForm = localStorage.getItem('comps_engine_form');
+    if (savedForm) {
+      try {
+        setForm(JSON.parse(savedForm));
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('comps_engine_form', JSON.stringify(form));
+  }, [form]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -401,29 +433,35 @@ export default function CompsEngine() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setError(null);
     try {
-      const prompt = `You are a ticket resale comparable-event analyst. Given the search input, return a JSON object matching this TypeScript type exactly (no markdown, no explanation, ONLY valid JSON):
-
-interface CompResult {
-  target_event: { name: string; category: string; tier: string; estimated_demand: "very_high"|"high"|"moderate"|"low"; market_context: string };
-  direct_comps: Comparable[];   // 2-4 same-artist comps
-  market_comps: Comparable[];   // 3-5 same-venue or same-genre comps
-  pricing_guidance: { suggested_buy_under: number; expected_resale_range: string; optimal_list_price: number; confidence: number; reasoning: string };
-  key_differences: string[];    // 3-5 items
-  watch_factors: string[];      // 3-5 items
-}
-interface Comparable { event_name: string; date: string; venue: string; city: string; relevance: "same_artist"|"same_venue"|"same_genre"|"same_tier"; relevance_score: number; face_value_range: string; resale_floor: number; resale_median: number; resale_peak: number; roi_range: string; sell_through: "sold_out"|"near_sellout"|"moderate"|"slow"; notes: string }
-
-Search input:
-Event/Artist: ${form.event}
-Venue: ${form.venue || 'any'}
-Date: ${form.date || 'upcoming'}
-Category: ${form.category}
-Market: ${form.market || 'any'}
-
-Use real historical ticket resale data where possible. For pricing, reference actual face values and secondary market prices. Return ONLY the JSON object.`;
-
-      const raw = await callClaude(prompt);
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = {
+        event: form.event,
+        venue: form.venue,
+        eventDate: form.date,
+        category: form.category,
+        market: form.market,
+      };
+      const searchQueries = typeof COMPS_ENGINE_PROMPT.searchQueries === 'function'
+        ? COMPS_ENGINE_PROMPT.searchQueries(input)
+        : COMPS_ENGINE_PROMPT.searchQueries;
+      const prompt = COMPS_ENGINE_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: COMPS_ENGINE_PROMPT.model,
+        maxTokens: COMPS_ENGINE_PROMPT.maxTokens,
+        searchQueries,
+      });
       const parsed: CompResult = JSON.parse(raw);
       setResult(parsed);
     } catch (err) {
@@ -568,6 +606,20 @@ Use real historical ticket resale data where possible. For pricing, reference ac
           <span className="ml-3 text-sm" style={{ color: 'var(--text-muted)' }}>
             Pulling comparable events&hellip;
           </span>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/*  ERROR STATE                                                 */}
+      {/* ============================================================ */}
+      {error && !loading && (
+        <div className="rounded-lg border p-6 text-center" style={{ background: '#78350f20', borderColor: '#f59e0b40' }}>
+          <AlertTriangle size={32} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
+          <p className="text-sm mb-4" style={{ color: '#fcd34d' }}>{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={handleSearch} className="text-sm px-4 py-2 rounded" style={{ background: '#10b981', color: '#fff' }}>Retry</button>
+            <button onClick={loadDemo} className="text-sm px-4 py-2 rounded border" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>Load demo instead</button>
+          </div>
         </div>
       )}
 

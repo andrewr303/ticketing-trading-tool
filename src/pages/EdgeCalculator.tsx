@@ -1,7 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Calculator, Loader2, TrendingUp, TrendingDown, AlertTriangle, Target, Clock, DollarSign, BarChart3, ShieldAlert, ArrowRight } from 'lucide-react';
-import { callClaude } from '../components/APIClient';
-import type { Analysis, AnalysisInput } from '../lib/types';
+import { callLLM } from '../components/APIClient';
+import { EDGE_CALC_PROMPT } from '../lib/prompts';
+import type { Analysis, AnalysisInput, EventSearchResult } from '../lib/types';
+import EventSearchInput from '../components/EventSearchInput';
+import { getTiersForVenue } from '../lib/venueTiers';
 
 const SAMPLE_ANALYSIS: Analysis = {
   verdict: "STRONG_BUY",
@@ -62,14 +65,58 @@ const VERDICT_STYLES: Record<string, { bg: string; text: string; glow: string }>
 
 export default function EdgeCalculator() {
   const [form, setForm] = useState<AnalysisInput>({ event: '', venue: '', date: '', buyPrice: 0, tier: 'Floor/VIP', quantity: 2, category: 'Concert' });
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [availableTiers, setAvailableTiers] = useState<string[]>(['Floor/VIP', 'Lower Bowl', 'Mid Level', 'Upper Bowl', 'GA']);
+  const [analysis, setAnalysis] = useState<Analysis | null>(() => {
+    const saved = localStorage.getItem('edge_calculator_analysis');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (analysis) {
+      localStorage.setItem('edge_calculator_analysis', JSON.stringify(analysis));
+    }
+  }, [analysis]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('overview');
   const verdictRef = useRef<HTMLDivElement>(null);
 
+  const handleEventSelect = (result: EventSearchResult) => {
+    if (!result.venue && !result.date) {
+      // Manual mode — just update event name
+      setForm(f => ({ ...f, event: result.name }));
+      return;
+    }
+    const tiers = getTiersForVenue(result.venue);
+    setAvailableTiers(tiers);
+    const catMap: Record<string, string> = { concert: 'Concert', sports: 'Sports', theater: 'Theater', comedy: 'Comedy', festival: 'Festival', other: 'Other' };
+    setForm(f => ({
+      ...f,
+      event: result.name,
+      venue: result.venue || f.venue,
+      date: result.date || f.date,
+      category: catMap[result.category] || f.category,
+      tier: tiers[0],
+    }));
+  };
+
+  const handleVenueChange = (venue: string) => {
+    const tiers = getTiersForVenue(venue);
+    setAvailableTiers(tiers);
+    setForm(f => ({ ...f, venue, tier: tiers[0] }));
+  };
+
   const loadDemo = () => {
-    setForm({ event: 'Kendrick Lamar — Empower Field', venue: 'Empower Field, Denver', date: '2026-07-25', buyPrice: 250, tier: 'Floor/VIP', quantity: 4, category: 'Concert' });
+    const tiers = getTiersForVenue('Empower Field, Denver');
+    setAvailableTiers(tiers);
+    setForm({ event: 'Kendrick Lamar — Empower Field', venue: 'Empower Field, Denver', date: '2026-07-25', buyPrice: 250, tier: tiers[0], quantity: 4, category: 'Concert' });
     setAnalysis(SAMPLE_ANALYSIS);
     setTimeout(() => verdictRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
@@ -79,16 +126,35 @@ export default function EdgeCalculator() {
     setLoading(true);
     setError(null);
     try {
-      const prompt = `You are a senior ticket market analyst. Analyze this potential ticket purchase:
-Event: ${form.event}, Venue: ${form.venue}, Date: ${form.date}, Buy Price: $${form.buyPrice}, Section: ${form.tier}, Quantity: ${form.quantity}, Category: ${form.category}
-
-Use web search to find: current secondary market prices, historical resale performance for this artist/team, demand signals, comparable events.
-
-Return ONLY valid JSON (no markdown, no backticks) matching this schema:
-${JSON.stringify(SAMPLE_ANALYSIS, null, 2)}
-
-Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 demand signals, 3-5 risk factors.`;
-      const raw = await callClaude(prompt, true);
+      const date = new Date().toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      const input = {
+        event: form.event,
+        venue: form.venue,
+        eventDate: form.date,
+        buyPrice: form.buyPrice,
+        tier: form.tier,
+        quantity: form.quantity,
+        category: form.category,
+      };
+      const searchQueries = typeof EDGE_CALC_PROMPT.searchQueries === 'function'
+        ? EDGE_CALC_PROMPT.searchQueries(input)
+        : EDGE_CALC_PROMPT.searchQueries;
+      const prompt = EDGE_CALC_PROMPT.buildPrompt({
+        date,
+        searchResults: "${searchResults}",
+        ...input,
+      });
+      const raw = await callLLM({
+        prompt,
+        modelTier: EDGE_CALC_PROMPT.model,
+        maxTokens: EDGE_CALC_PROMPT.maxTokens,
+        searchQueries,
+      });
       const parsed: Analysis = JSON.parse(raw);
       setAnalysis(parsed);
     } catch (err) {
@@ -135,12 +201,11 @@ Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 dem
       <div className="rounded-lg border p-5 mb-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-default)' }}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="md:col-span-2">
-            <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Event / Artist / Team</label>
-            <input value={form.event} onChange={e => setForm({ ...form, event: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} placeholder="e.g. Kendrick Lamar — Empower Field" />
+            <EventSearchInput onSelect={handleEventSelect} initialValue={form.event} />
           </div>
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Venue</label>
-            <input value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+            <input value={form.venue} onChange={e => handleVenueChange(e.target.value)} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
           </div>
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Event Date</label>
@@ -157,7 +222,7 @@ Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 dem
           <div>
             <label className="block mb-1" style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Section Tier</label>
             <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })} className="w-full rounded px-3 py-2.5 text-sm border outline-none" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}>
-              <option>Floor/VIP</option><option>Lower Bowl</option><option>Mid Level</option><option>Upper Bowl</option><option>GA</option>
+              {availableTiers.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
@@ -358,8 +423,20 @@ Be specific with numbers. Use real comparable events. Include 3-5 comps, 4-6 dem
         </div>
       )}
 
+      {/* Error state */}
+      {error && !loading && (
+        <div className="rounded-lg border p-6 text-center" style={{ background: '#78350f20', borderColor: '#f59e0b40' }}>
+          <AlertTriangle size={32} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
+          <p className="text-sm mb-4" style={{ color: '#fcd34d' }}>{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={analyze} className="text-sm px-4 py-2 rounded" style={{ background: 'var(--accent-green)', color: '#fff' }}>Retry</button>
+            <button onClick={loadDemo} className="text-sm px-4 py-2 rounded border" style={{ borderColor: 'var(--border-hover)', color: 'var(--text-secondary)' }}>Load demo instead</button>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!analysis && !loading && (
+      {!analysis && !loading && !error && (
         <div className="text-center py-16">
           <Calculator size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Enter an event and buy price to analyze profitability</p>

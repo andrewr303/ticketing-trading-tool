@@ -1,0 +1,18 @@
+
+[functions.claude-proxy]
+enabled = true
+verify_jwt = true
+import_map = "./functions/claude-proxy/deno.json"
+entrypoint = "./functions/claude-proxy/index.ts"
+
+[functions.event-search]
+enabled = true
+verify_jwt = true
+import_map = "./functions/event-search/deno.json"
+entrypoint = "./functions/event-search/index.ts"
+
+[functions.deep-research]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deep-research/deno.json"
+entrypoint = "./functions/deep-research/index.ts"
