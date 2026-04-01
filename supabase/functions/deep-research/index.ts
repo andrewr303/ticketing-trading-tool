@@ -102,6 +102,91 @@ async function callOpenRouter(prompt: string, maxTokens: number): Promise<string
 }
 
 // ---------------------------------------------------------------------------
+// Ticketmaster Discovery API — real event data
+// ---------------------------------------------------------------------------
+interface TmEvent {
+  name: string
+  id: string
+  url?: string
+  dates?: { start?: { localDate?: string; localTime?: string }; status?: { code?: string }; timezone?: string }
+  priceRanges?: Array<{ min?: number; max?: number }>
+  _embedded?: {
+    venues?: Array<{ name?: string; city?: { name?: string }; state?: { stateCode?: string } }>
+    attractions?: Array<{ name?: string }>
+  }
+  classifications?: Array<{ segment?: { name?: string }; genre?: { name?: string } }>
+  sales?: { public?: { startDateTime?: string }; presales?: Array<{ name?: string; startDateTime?: string }> }
+}
+
+async function fetchTicketmaster(
+  apiKey: string,
+  categories: string[],
+  regions: string[],
+  dateRange: string,
+): Promise<string> {
+  const now = new Date()
+  const start = now.toISOString().replace(/\.\d+Z$/, "Z")
+  const end = new Date(now)
+  switch (dateRange) {
+    case "this_week": end.setDate(now.getDate() + 7); break
+    case "next_2_weeks": end.setDate(now.getDate() + 14); break
+    case "this_month": end.setMonth(now.getMonth() + 1); break
+    case "next_3_months": end.setMonth(now.getMonth() + 3); break
+    default: end.setDate(now.getDate() + 14)
+  }
+
+  const catMap: Record<string, string> = { concert: "music", sports: "sports", theater: "arts & theatre" }
+  const classificationName = categories.length
+    ? categories.map(c => catMap[c] || c).join(",")
+    : undefined
+
+  const regionMap: Record<string, string> = { denver: "CO", colorado: "CO", "new york": "NY", california: "CA", texas: "TX", florida: "FL", chicago: "IL" }
+  const nonNational = regions.filter(r => r !== "nationwide")
+  const stateCode = nonNational.length ? regionMap[nonNational[0].toLowerCase()] : undefined
+
+  const params = new URLSearchParams({
+    apikey: apiKey,
+    startDateTime: start,
+    endDateTime: end.toISOString().replace(/\.\d+Z$/, "Z"),
+    size: "50",
+    sort: "relevance,desc",
+    countryCode: "US",
+  })
+  if (classificationName) params.set("classificationName", classificationName)
+  if (stateCode) params.set("stateCode", stateCode)
+
+  try {
+    const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`)
+    if (!res.ok) return "(Ticketmaster API unavailable)"
+    const data = await res.json()
+    const events: TmEvent[] = data._embedded?.events || []
+    if (!events.length) return "(No Ticketmaster events found for this query)"
+
+    return events.map((ev, i) => {
+      const venue = ev._embedded?.venues?.[0]
+      const price = ev.priceRanges?.[0]
+      const cls = ev.classifications?.[0]
+      const lines = [
+        `[${i + 1}] ${ev.name}`,
+        `    Date: ${ev.dates?.start?.localDate || "TBD"}${ev.dates?.start?.localTime ? " " + ev.dates.start.localTime : ""}`,
+        `    Venue: ${venue?.name || "TBD"}, ${venue?.city?.name || ""}, ${venue?.state?.stateCode || ""}`,
+        `    Category: ${cls?.segment?.name || "Other"} (${cls?.genre?.name || ""})`,
+      ]
+      if (price) lines.push(`    Price Range: $${price.min ?? "?"}-$${price.max ?? "?"}`)
+      if (ev.dates?.status?.code) lines.push(`    Sale Status: ${ev.dates.status.code}`)
+      if (ev.sales?.presales?.length) {
+        const presaleInfo = ev.sales.presales.slice(0, 3).map(p => `${p.name}: ${p.startDateTime || "TBD"}`).join("; ")
+        lines.push(`    Presales: ${presaleInfo}`)
+      }
+      if (ev.url) lines.push(`    URL: ${ev.url}`)
+      return lines.join("\n")
+    }).join("\n\n")
+  } catch {
+    return "(Ticketmaster API error)"
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Build search queries based on user filters
 // ---------------------------------------------------------------------------
 function buildSearchQueries(
@@ -349,8 +434,10 @@ Deno.serve(async (req) => {
   } = await req.json()
 
   const youApiKey = Deno.env.get("YOU_API_KEY")
-  if (!youApiKey) {
-    return new Response(JSON.stringify({ error: "YOU_API_KEY not configured" }), {
+  const tmApiKey = Deno.env.get("TICKETMASTER_API_KEY") || "GVdlsX9jXKxl3aTFYMQPYaNjItOjnpHG"
+
+  if (!youApiKey && !tmApiKey) {
+    return new Response(JSON.stringify({ error: "No search APIs configured (need YOU_API_KEY or TICKETMASTER_API_KEY)" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
@@ -359,17 +446,26 @@ Deno.serve(async (req) => {
   const startTime = Date.now()
   const today = new Date().toISOString().split("T")[0]
 
-  // Phase 1: Parallel web searches
+  // Phase 1: Parallel data fetching — web search + Ticketmaster
   const searchQueries = buildSearchQueries(regions, categories, dateRange, focusAreas)
-  const searchData = await youSearch(searchQueries, youApiKey)
 
-  // Phase 2: Deep research synthesis
-  const regionText = regions.includes("nationwide") ? "nationwide US" : regions.join(", ")
-  const researchQuery = `Live event ticket trading opportunities ${regionText}: which concerts, sports events, and shows have the highest resale potential in the next few weeks? Include pricing data from StubHub, Ticketmaster, SeatGeek, and Vivid Seats. What events are trending, selling out, or going on sale soon?`
-  const research = await youResearch(researchQuery, youApiKey, effortLevel)
+  const [searchData, ticketmasterData, research] = await Promise.all([
+    youApiKey
+      ? youSearch(searchQueries, youApiKey)
+      : Promise.resolve("(Web search unavailable — YOU_API_KEY not configured)"),
+    fetchTicketmaster(tmApiKey, categories, regions, dateRange),
+    youApiKey
+      ? youResearch(
+          `Live event ticket trading opportunities ${regions.includes("nationwide") ? "nationwide US" : regions.join(", ")}: which concerts, sports events, and shows have the highest resale potential in the next few weeks? Include pricing data from StubHub, Ticketmaster, SeatGeek, and Vivid Seats. What events are trending, selling out, or going on sale soon?`,
+          youApiKey,
+          effortLevel,
+        )
+      : Promise.resolve({ content: "(Research API unavailable)", sources: [] as Array<{ url: string; title: string; snippets: string[] }> }),
+  ])
 
-  // Phase 3: LLM synthesis
-  const prompt = buildPrompt(today, searchData, research.content, research.sources, regions, categories)
+  // Phase 2: LLM synthesis with all data sources
+  const combinedSearchData = `### Ticketmaster Live Event Data\n${ticketmasterData}\n\n### Web Search Results\n${searchData}`
+  const prompt = buildPrompt(today, combinedSearchData, research.content, research.sources, regions, categories)
   const llmOutput = await callOpenRouter(prompt, 8000)
 
   // Parse the JSON response
