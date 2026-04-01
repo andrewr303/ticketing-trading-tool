@@ -173,8 +173,32 @@
   "hotPaths": [
     {
       "path": "src\\components\\APIClient.tsx",
-      "accessCount": 6,
-      "lastAccessed": 1775001469606,
+      "accessCount": 8,
+      "lastAccessed": 1775006756411,
+      "type": "file"
+    },
+    {
+      "path": "supabase\\functions\\deep-research\\index.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775006852682,
+      "type": "file"
+    },
+    {
+      "path": ".env",
+      "accessCount": 2,
+      "lastAccessed": 1775006658806,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\types.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775006646799,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\ticketmaster.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775006704939,
       "type": "file"
     }
   ],
