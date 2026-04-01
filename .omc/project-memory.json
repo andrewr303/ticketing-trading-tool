@@ -170,6 +170,13 @@
       ]
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "src\\components\\APIClient.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1775001469606,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }

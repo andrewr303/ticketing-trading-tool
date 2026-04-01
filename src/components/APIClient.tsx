@@ -2,7 +2,7 @@ import type { ModelTier } from '../lib/prompts'
 import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-flash-2.5";
+const DEFAULT_MODEL = "google/gemini-3-flash-preview";
 
 interface CallOptions {
   prompt: string
