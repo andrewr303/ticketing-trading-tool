@@ -592,7 +592,12 @@ export default function OpenBell() {
                 <span style={labelStyle}>Market Overview</span>
                 {researchMeta && (
                   <span style={{ marginLeft: "auto", fontSize: "10px", color: "var(--text-muted)" }}>
-                    {researchMeta.total_sources} sources · {Math.round(researchMeta.generation_time_ms / 1000)}s
+                    {researchMeta.total_sources} sources
+                    {typeof researchMeta.ticketmaster_events_fetched === "number"
+                      ? ` · TM ${researchMeta.ticketmaster_events_fetched} events`
+                      : ""}
+                    {" · "}
+                    {Math.round(researchMeta.generation_time_ms / 1000)}s
                   </span>
                 )}
               </div>

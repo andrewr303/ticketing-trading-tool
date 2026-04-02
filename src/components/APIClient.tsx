@@ -3,6 +3,7 @@ import type { EventSearchResult, DeepResearchRequest, DeepResearchResult, Discov
 import { searchTicketmaster, searchTicketmasterByKeyword, formatTicketmasterForPrompt } from '../lib/ticketmaster'
 import type { SearchOptions } from '../lib/ticketmaster'
 import { supabase } from '../lib/supabase'
+import { isEventDateClearlyInPast } from '../lib/eventDateFilter'
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-3-flash-preview";
@@ -171,13 +172,17 @@ export interface DeepResearchResponse {
     research_effort: string
     total_sources: number
     generation_time_ms: number
+    ticketmaster_events_fetched?: number
   }
 }
 
 /** Normalize LLM JSON so UI types match (edge vs client prompts differ; models drift). */
 function normalizeDeepResearchResult(parsed: Record<string, unknown>): DeepResearchResult {
   const rawEvents = Array.isArray(parsed.discovered_events) ? parsed.discovered_events : []
-  const discovered_events: DiscoveredEvent[] = rawEvents.map((ev: Record<string, unknown>) => ({
+  const futureOnly = rawEvents.filter(
+    (ev: Record<string, unknown>) => !isEventDateClearlyInPast(String(ev.event_date ?? '')),
+  )
+  const discovered_events: DiscoveredEvent[] = futureOnly.map((ev: Record<string, unknown>) => ({
     event_name: String(ev.event_name ?? ''),
     artist_or_team: String(ev.artist_or_team ?? ''),
     event_date: String(ev.event_date ?? ''),
@@ -246,9 +251,15 @@ function normalizeDeepResearchResult(parsed: Record<string, unknown>): DeepResea
     snippet: String(s.snippet ?? ''),
   }))
 
+  const stripped = rawEvents.length - futureOnly.length
+  const baseOverview = String(parsed.market_overview ?? '')
+  const market_overview = stripped > 0
+    ? `${baseOverview}${baseOverview ? ' ' : ''}(${stripped} past-dated event(s) removed — only upcoming events are shown.)`
+    : baseOverview
+
   return {
     generated_at: String(parsed.generated_at ?? new Date().toISOString()),
-    market_overview: String(parsed.market_overview ?? ''),
+    market_overview,
     discovered_events,
     signal_dashboard,
     on_sales: Array.isArray(parsed.on_sales) ? parsed.on_sales as DeepResearchResult['on_sales'] : [],
@@ -320,17 +331,25 @@ export async function callDeepResearch(options: DeepResearchRequest): Promise<De
   const tmText = formatTicketmasterForPrompt(tmEvents)
   const tmHasRows = tmEvents.length > 0
 
-  const prompt = `You are a ticket market research analyst. Research upcoming live events for the ${regions} market, focusing on ${categories} in the ${dateRange.replace(/_/g, ' ')} timeframe. Effort level: ${options.effortLevel || 'standard'}.
+  const todayYmd = new Date().toISOString().slice(0, 10)
+
+  const prompt = `You are a ticket market research analyst for **upcoming US events only**. Today is ${todayYmd}. Scope: ${regions}, categories: ${categories}, window: ${dateRange.replace(/_/g, ' ')}. Effort: ${options.effortLevel || 'standard'}.
 
 ## LIVE EVENT DATA FROM TICKETMASTER
 
-${tmText || '(No Ticketmaster rows returned for this query — API key missing, rate-limited, or no events in window.)'}
+${tmText || '(No Ticketmaster rows — check VITE_TICKETMASTER_API_KEY and network; do not invent events.)'}
+
+## Hard rules
+
+1. Every event_date must be **on or after ${todayYmd}**. Never output 2023/2024 tours or old games from memory.
+2. If the Ticketmaster block lists numbered events, discovered_events must match those rows only (names, dates, venues, cities).
+3. If Ticketmaster is empty, return discovered_events: [] and explain in market_overview; add a risk_alerts entry with defensive_action. Do not fabricate a slate from memory.
 
 ## Instructions
 
 ${tmHasRows
-    ? `Use the Ticketmaster block above as the anchor for event names, dates, and venues. You may infer resale dynamics and scores from general market patterns, but do not invent events that contradict the Ticketmaster list.`
-    : `Ticketmaster data is missing or empty. Still produce a useful report: synthesize 8–15 plausible upcoming opportunities for this market and timeframe using public knowledge of major tours, sports seasons, and theater runs. Clearly mark lower confidence (≤55) and state in market_overview that primary feed was unavailable.`}
+    ? `Score and analyze only the Ticketmaster events above.`
+    : `No live rows — return empty discovered_events per rule 3.`}
 
 Return a JSON object matching this structure exactly:
 {

@@ -132,64 +132,126 @@ function tmDateWindow(dateRange: string): { start: string; end: string } {
   return { start, end: end.toISOString().replace(/\.\d+Z$/, "Z") }
 }
 
+/** YYYY-MM-DD (UTC calendar) for comparing to Ticketmaster localDate strings. */
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function filterFutureTmEvents(events: TmEvent[]): TmEvent[] {
+  const t = todayIsoDate()
+  return events.filter((ev) => {
+    const d = ev.dates?.start?.localDate
+    if (!d) return true
+    return d >= t
+  })
+}
+
+function dedupeTmEvents(events: TmEvent[]): TmEvent[] {
+  const seen = new Set<string>()
+  return events.filter((e) => {
+    if (!e.id || seen.has(e.id)) return false
+    seen.add(e.id)
+    return true
+  })
+}
+
+/** Ticketmaster accepts one classificationName; comma-separated values often return 400 or empty. */
+function singleClassificationName(categories: string[]): string | undefined {
+  if (categories.length !== 1) return undefined
+  const catMap: Record<string, string> = { concert: "Music", sports: "Sports", theater: "Arts & Theatre", comedy: "Arts & Theatre", festival: "Music" }
+  const c = categories[0].toLowerCase()
+  return catMap[c] || undefined
+}
+
 async function fetchTicketmasterOnce(
   apiKey: string,
   categories: string[],
   regions: string[],
   dateRange: string,
-): Promise<{ text: string; count: number }> {
+  opts: { classificationName?: string; skipClassification?: boolean } = {},
+): Promise<{ text: string; count: number; httpStatus?: number; errorHint?: string }> {
   const { start, end } = tmDateWindow(dateRange)
 
-  const catMap: Record<string, string> = { concert: "music", sports: "sports", theater: "arts & theatre" }
-  const classificationName = categories.length
-    ? categories.map(c => catMap[c] || c).join(",")
-    : undefined
+  const classificationName = opts.skipClassification
+    ? undefined
+    : opts.classificationName ?? singleClassificationName(categories)
 
   const regionMap: Record<string, string> = { denver: "CO", colorado: "CO", "new york": "NY", california: "CA", texas: "TX", florida: "FL", chicago: "IL" }
   const nonNational = regions.filter(r => r !== "nationwide")
   const stateCode = nonNational.length ? regionMap[nonNational[0].toLowerCase()] : undefined
 
-  const params = new URLSearchParams({
+  const baseParams: Record<string, string> = {
     apikey: apiKey,
     startDateTime: start,
     endDateTime: end,
     size: "50",
     sort: "date,asc",
     countryCode: "US",
-  })
-  if (classificationName) params.set("classificationName", classificationName)
-  if (stateCode) params.set("stateCode", stateCode)
-
-  try {
-    const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`)
-    if (!res.ok) return { text: "(Ticketmaster API unavailable)", count: 0 }
-    const data = await res.json()
-    const events: TmEvent[] = data._embedded?.events || []
-    if (!events.length) return { text: "(No Ticketmaster events found for this query)", count: 0 }
-
-    const text = events.map((ev, i) => {
-      const venue = ev._embedded?.venues?.[0]
-      const price = ev.priceRanges?.[0]
-      const cls = ev.classifications?.[0]
-      const lines = [
-        `[${i + 1}] ${ev.name}`,
-        `    Date: ${ev.dates?.start?.localDate || "TBD"}${ev.dates?.start?.localTime ? " " + ev.dates.start.localTime : ""}`,
-        `    Venue: ${venue?.name || "TBD"}, ${venue?.city?.name || ""}, ${venue?.state?.stateCode || ""}`,
-        `    Category: ${cls?.segment?.name || "Other"} (${cls?.genre?.name || ""})`,
-      ]
-      if (price) lines.push(`    Price Range: $${price.min ?? "?"}-$${price.max ?? "?"}`)
-      if (ev.dates?.status?.code) lines.push(`    Sale Status: ${ev.dates.status.code}`)
-      if (ev.sales?.presales?.length) {
-        const presaleInfo = ev.sales.presales.slice(0, 3).map(p => `${p.name}: ${p.startDateTime || "TBD"}`).join("; ")
-        lines.push(`    Presales: ${presaleInfo}`)
-      }
-      if (ev.url) lines.push(`    URL: ${ev.url}`)
-      return lines.join("\n")
-    }).join("\n\n")
-    return { text, count: events.length }
-  } catch {
-    return { text: "(Ticketmaster API error)", count: 0 }
   }
+
+  const allEvents: TmEvent[] = []
+
+  for (let page = 0; page < 3; page++) {
+    const params = new URLSearchParams({ ...baseParams, page: String(page) })
+    if (classificationName) params.set("classificationName", classificationName)
+    if (stateCode) params.set("stateCode", stateCode)
+
+    let res: Response
+    try {
+      res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { text: `(Ticketmaster network error: ${msg})`, count: 0, errorHint: msg }
+    }
+
+    if (!res.ok) {
+      let hint = ""
+      try {
+        const errBody = await res.json() as { errors?: Array<{ detail?: string }>; fault?: { faultstring?: string } }
+        hint = errBody.errors?.[0]?.detail || errBody.fault?.faultstring || ""
+      } catch {
+        hint = (await res.text()).slice(0, 280)
+      }
+      return {
+        text: `(Ticketmaster API HTTP ${res.status}${hint ? `: ${hint}` : ""})`,
+        count: 0,
+        httpStatus: res.status,
+        errorHint: hint,
+      }
+    }
+
+    const data = await res.json() as { _embedded?: { events?: TmEvent[] }; page?: { totalPages?: number } }
+    const pageEvents = data._embedded?.events || []
+    allEvents.push(...pageEvents)
+    const totalPages = data.page?.totalPages ?? 1
+    if (pageEvents.length < 50 || page + 1 >= totalPages) break
+  }
+
+  const future = dedupeTmEvents(filterFutureTmEvents(allEvents))
+  if (!future.length) {
+    return { text: "(No Ticketmaster events in this date window after filtering to future dates)", count: 0 }
+  }
+
+  const text = future.map((ev, i) => {
+    const venue = ev._embedded?.venues?.[0]
+    const price = ev.priceRanges?.[0]
+    const cls = ev.classifications?.[0]
+    const lines = [
+      `[${i + 1}] ${ev.name}`,
+      `    Date: ${ev.dates?.start?.localDate || "TBD"}${ev.dates?.start?.localTime ? " " + ev.dates.start.localTime : ""}`,
+      `    Venue: ${venue?.name || "TBD"}, ${venue?.city?.name || ""}, ${venue?.state?.stateCode || ""}`,
+      `    Category: ${cls?.segment?.name || "Other"} (${cls?.genre?.name || ""})`,
+    ]
+    if (price) lines.push(`    Price Range: $${price.min ?? "?"}-$${price.max ?? "?"}`)
+    if (ev.dates?.status?.code) lines.push(`    Sale Status: ${ev.dates.status.code}`)
+    if (ev.sales?.presales?.length) {
+      const presaleInfo = ev.sales.presales.slice(0, 3).map(p => `${p.name}: ${p.startDateTime || "TBD"}`).join("; ")
+      lines.push(`    Presales: ${presaleInfo}`)
+    }
+    if (ev.url) lines.push(`    URL: ${ev.url}`)
+    return lines.join("\n")
+  }).join("\n\n")
+  return { text, count: future.length }
 }
 
 async function fetchTicketmaster(
@@ -197,17 +259,35 @@ async function fetchTicketmaster(
   categories: string[],
   regions: string[],
   dateRange: string,
-): Promise<string> {
-  let { text, count } = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange)
-  if (count === 0 && dateRange !== "next_3_months") {
-    const wider = await fetchTicketmasterOnce(apiKey, categories, regions, "next_3_months")
-    if (wider.count > 0) {
-      text = `${wider.text}\n\n(Note: widened date window to next 3 months because the selected range returned no events.)`
-    } else {
-      text = wider.text
+): Promise<{ text: string; count: number }> {
+  let r = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange, {})
+
+  const hadClassification = Boolean(singleClassificationName(categories))
+  if (r.count === 0 && hadClassification) {
+    const noCls = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange, { skipClassification: true })
+    if (noCls.count > 0) {
+      return {
+        text: `${noCls.text}\n\n(Note: returned unfiltered categories — TM had no rows for the selected genre filter.)`,
+        count: noCls.count,
+      }
     }
+    r = noCls
   }
-  return text
+
+  if (r.count === 0 && dateRange !== "next_3_months") {
+    const wider = await fetchTicketmasterOnce(apiKey, categories, regions, "next_3_months", {
+      skipClassification: hadClassification,
+    })
+    if (wider.count > 0) {
+      return {
+        text: `${wider.text}\n\n(Note: widened date window to next 3 months because the selected range returned no events.)`,
+        count: wider.count,
+      }
+    }
+    return { text: wider.text, count: wider.count }
+  }
+
+  return { text: r.text, count: r.count }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +346,46 @@ function buildSearchQueries(
   return queries
 }
 
+function isEventDateClearlyInPast(raw: string): boolean {
+  const trimmed = String(raw || "").trim()
+  const iso = trimmed.match(/\b(\d{4})-(\d{2})-(\d{2})\b/)
+  if (iso) {
+    const y = Number(iso[1])
+    const m = Number(iso[2]) - 1
+    const d = Number(iso[3])
+    const parsed = new Date(y, m, d)
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    return parsed.getTime() < start.getTime()
+  }
+  const t = Date.parse(trimmed)
+  if (!Number.isNaN(t)) {
+    const parsed = new Date(t)
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    return parsed.getTime() < start.getTime()
+  }
+  return false
+}
+
+/** Drop hallucinated or stale rows; keep unparseable dates (avoid over-stripping). */
+function sanitizeDeepResearchResult(result: Record<string, unknown>): void {
+  const events = Array.isArray(result.discovered_events)
+    ? result.discovered_events as Record<string, unknown>[]
+    : []
+  const before = events.length
+  result.discovered_events = events.filter((e) => !isEventDateClearlyInPast(String(e.event_date ?? "")))
+  const after = (result.discovered_events as unknown[]).length
+  const removed = before - after
+  if (removed > 0) {
+    const mo = String(result.market_overview ?? "")
+    result.market_overview =
+      mo +
+      (mo ? " " : "") +
+      `(${removed} past-dated event(s) removed — only upcoming events are allowed.)`
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Build the LLM synthesis prompt
 // ---------------------------------------------------------------------------
@@ -290,14 +410,21 @@ You are a senior ticket market analyst and quantitative trading strategist with 
 
 ## Task
 
-Today is ${date}. Generate a comprehensive deep research report covering event discovery, opportunity ranking, and signal analysis.
+Today is **${date}** (use this as the only "current" calendar reference). Generate a deep research report for **upcoming** US live events only.
 
 **Scope:** ${regionText}
 **Categories:** ${catText}
 
+## Hard constraints (do not violate)
+
+1. **No past events:** Every \`discovered_events[].event_date\` must refer to a date **on or after ${date}**. Never output events from 2023, 2024, or any year before the current year unless the calendar date is still in the future (impossible for those years). Do not use training-data memory of old tours (e.g. Eras Tour 2023, 2023 NBA openers).
+2. **Ticketmaster is ground truth when present:** If "Ticketmaster Live Event Data" below contains numbered rows \`[1] ...\`, your \`discovered_events\` must be **only** those events (same name, date, city/state, venue). You may score and reason about them; do not substitute different dates or venues.
+3. **If Ticketmaster data is missing or only error text:** Set \`discovered_events\` to \`[]\`. Do not invent a full slate from web search or memory. Add one \`risk_alerts\` entry explaining that the live feed failed. You may still fill \`signal_dashboard\` cautiously from web text, labeled as unverified.
+4. **Nationwide scope:** Venues must be in the **United States** unless the user scope explicitly names another country.
+
 ## Research Data
 
-### Web Search Results
+### Ticketmaster + web (verbatim feeds)
 ${searchData}
 
 ### Deep Research Synthesis
@@ -408,15 +535,15 @@ Return ONLY valid JSON. No markdown fences, no preamble.
 }
 
 ## Rules
-- Include 15-30 discovered events across multiple categories and regions
-- At least 3 different action types (not all BUY)
-- At least 1 event with negative ROI
+- If Ticketmaster lists N events, return **at most N** discovered_events (one per TM row), unless TM is empty then return **zero** events per constraint (3) above.
+- When you have TM rows: include 15-30 only if TM provides that many; otherwise include all TM rows.
+- At least 3 different action types when you have ≥3 TM-backed events (otherwise vary what you can).
+- At least 1 event with negative or low ROI when you have ≥3 events.
 - All source_citations reference valid indexes in sources[]
 - edge_score must match the weighted formula
-- No confidence above 95, no STRONG_BUY below 80 confidence
+- No confidence above 95
 - ROI formula: ((sale_price * 0.85) - buy_price) / buy_price * 100
-- If data is insufficient for an event, lower confidence and note uncertainty
-- **Ticketmaster resilience:** If the Ticketmaster section is empty, says "unavailable", "skipped", or "No Ticketmaster events", you MUST still populate discovered_events using Web Search Results and Deep Research Synthesis. Set confidence ≤ 60 for events not anchored to Ticketmaster rows, and explain the data gap in market_overview. Every risk_alerts entry MUST include a non-empty defensive_action (e.g. verify feeds, widen date range, or pause sizing).
+- Every risk_alerts entry MUST include a non-empty defensive_action
 
 Generate the report now.`
 }
@@ -470,25 +597,29 @@ Deno.serve(async (req) => {
 
   const startTime = Date.now()
   const today = new Date().toISOString().split("T")[0]
+  const year = new Date().getFullYear()
 
   // Phase 1: Parallel data fetching — web search + Ticketmaster
   const searchQueries = buildSearchQueries(regions, categories, dateRange, focusAreas)
 
-  const [searchData, ticketmasterData, research] = await Promise.all([
+  const [searchData, tmPack, research] = await Promise.all([
     youApiKey
       ? youSearch(searchQueries, youApiKey)
       : Promise.resolve("(Web search unavailable — YOU_API_KEY not configured)"),
     tmApiKey
       ? fetchTicketmaster(tmApiKey, categories, regions, dateRange)
-      : Promise.resolve("(Ticketmaster skipped — TICKETMASTER_API_KEY not set in project secrets)"),
+      : Promise.resolve({ text: "(Ticketmaster skipped — TICKETMASTER_API_KEY not set in project secrets)", count: 0 }),
     youApiKey
       ? youResearch(
-          `Live event ticket trading opportunities ${regions.includes("nationwide") ? "nationwide US" : regions.join(", ")}: which concerts, sports events, and shows have the highest resale potential in the next few weeks? Include pricing data from StubHub, Ticketmaster, SeatGeek, and Vivid Seats. What events are trending, selling out, or going on sale soon?`,
+          `As of ${today}, focus on ${year} and future dates only. Live event ticket trading opportunities ${regions.includes("nationwide") ? "nationwide US" : regions.join(", ")}: which concerts, sports, and shows have resale potential in the next few weeks? Ignore any event before ${today}. Cite only current or upcoming events. Include StubHub, Ticketmaster, SeatGeek, Vivid Seats where relevant.`,
           youApiKey,
           effortLevel,
         )
       : Promise.resolve({ content: "(Research API unavailable)", sources: [] as Array<{ url: string; title: string; snippets: string[] }> }),
   ])
+
+  const ticketmasterData = tmPack.text
+  const tmEventCount = tmPack.count
 
   // Phase 2: LLM synthesis with all data sources
   const combinedSearchData = `### Ticketmaster Live Event Data\n${ticketmasterData}\n\n### Web Search Results\n${searchData}`
@@ -507,13 +638,15 @@ Deno.serve(async (req) => {
     })
   }
 
+  sanitizeDeepResearchResult(result as Record<string, unknown>)
+
   const webSearchHits =
     searchData.length > 120 &&
     !searchData.startsWith("(Web search unavailable") &&
     !searchData.startsWith("(No search results")
       ? 1
       : 0
-  const tmHits = !ticketmasterData.startsWith("(") && /\[[0-9]+\]/.test(ticketmasterData)
+  const tmHits = tmEventCount > 0
   const total_sources = research.sources.length + (tmHits ? 1 : 0) + webSearchHits
 
   const response = {
@@ -522,6 +655,7 @@ Deno.serve(async (req) => {
       search_queries_run: searchQueries.length,
       research_effort: effortLevel,
       total_sources,
+      ticketmaster_events_fetched: tmEventCount,
       generation_time_ms: Date.now() - startTime,
     },
   }

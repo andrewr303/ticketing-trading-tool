@@ -107,17 +107,39 @@ function getDateRange(range: string): { start: string; end: string } {
   return { start, end: end.toISOString().replace(/\.\d+Z$/, 'Z') }
 }
 
-// Map our category names to TM classificationName values
-function getCategoryFilter(categories?: string[]): string[] {
-  if (!categories?.length) return []
+/** TM Discovery API expects a single classificationName; comma-lists often fail or return empty. */
+function singleClassificationName(categories?: string[]): string | undefined {
+  if (!categories?.length || categories.length !== 1) return undefined
   const map: Record<string, string> = {
-    concert: 'music',
-    sports: 'sports',
-    theater: 'arts & theatre',
-    comedy: 'arts & theatre',
-    festival: 'music',
+    concert: 'Music',
+    sports: 'Sports',
+    theater: 'Arts & Theatre',
+    comedy: 'Arts & Theatre',
+    festival: 'Music',
   }
-  return categories.map(c => map[c] || c).filter(Boolean)
+  return map[categories[0].toLowerCase()] || undefined
+}
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function filterFutureRawEvents(events: TicketmasterEvent[]): TicketmasterEvent[] {
+  const t = todayIsoDate()
+  return events.filter((ev) => {
+    const d = ev.dates?.start?.localDate
+    if (!d) return true
+    return d >= t
+  })
+}
+
+function dedupeById(events: TicketmasterEvent[]): TicketmasterEvent[] {
+  const seen = new Set<string>()
+  return events.filter((e) => {
+    if (!e.id || seen.has(e.id)) return false
+    seen.add(e.id)
+    return true
+  })
 }
 
 // Map region names to state codes for filtering
@@ -144,46 +166,78 @@ export interface SearchOptions {
   city?: string
 }
 
+async function fetchTicketmasterPage(
+  base: URLSearchParams,
+  page: number,
+): Promise<{ events: TicketmasterEvent[]; totalPages: number }> {
+  const params = new URLSearchParams(base)
+  params.set('page', String(page))
+  const res = await fetch(`${TM_BASE}/events.json?${params}`)
+  if (!res.ok) {
+    return { events: [], totalPages: 0 }
+  }
+  const data: TicketmasterResponse = await res.json()
+  const events = data._embedded?.events || []
+  const totalPages = data.page?.totalPages ?? 1
+  return { events, totalPages }
+}
+
 export async function searchTicketmaster(options: SearchOptions = {}): Promise<FormattedEvent[]> {
   const apiKey = import.meta.env.VITE_TICKETMASTER_API_KEY
   if (!apiKey) return []
 
   const { start, end } = getDateRange(options.dateRange || 'next_2_weeks')
-  const params = new URLSearchParams({
+  const baseParams = new URLSearchParams({
     apikey: apiKey,
     startDateTime: start,
     endDateTime: end,
     size: String(options.size || 50),
-    sort: options.sort || 'relevance,desc',
+    sort: options.sort || 'date,asc',
     countryCode: 'US',
   })
 
-  if (options.keyword) params.set('keyword', options.keyword)
+  if (options.keyword) baseParams.set('keyword', options.keyword)
 
-  const categoryFilters = getCategoryFilter(options.categories)
-  if (categoryFilters.length) params.set('classificationName', categoryFilters.join(','))
+  let classification = singleClassificationName(options.categories)
+  if (classification) baseParams.set('classificationName', classification)
 
-  // Region filtering
   if (options.stateCode) {
-    params.set('stateCode', options.stateCode)
+    baseParams.set('stateCode', options.stateCode)
   } else if (options.regions?.length) {
     const nonNationwide = options.regions.filter(r => r !== 'nationwide')
     if (nonNationwide.length) {
       const stateCode = REGION_STATE_MAP[nonNationwide[0].toLowerCase()]
-      if (stateCode) params.set('stateCode', stateCode)
-      else params.set('keyword', (options.keyword ? options.keyword + ' ' : '') + nonNationwide[0])
+      if (stateCode) baseParams.set('stateCode', stateCode)
+      else baseParams.set('keyword', (options.keyword ? options.keyword + ' ' : '') + nonNationwide[0])
     }
   }
 
-  if (options.city) params.append('city', options.city)
+  if (options.city) baseParams.append('city', options.city)
 
-  const url = `${TM_BASE}/events.json?${params}`
+  const merged: TicketmasterEvent[] = []
+  let totalPages = 1
+  for (let page = 0; page < 3; page++) {
+    const { events, totalPages: tp } = await fetchTicketmasterPage(baseParams, page)
+    totalPages = tp
+    merged.push(...events)
+    if (events.length < Number(options.size || 50) || page + 1 >= totalPages) break
+  }
 
-  const res = await fetch(url)
-  if (!res.ok) return []
+  let raw = dedupeById(filterFutureRawEvents(merged))
 
-  const data: TicketmasterResponse = await res.json()
-  return (data._embedded?.events || []).map(formatEvent)
+  if (!raw.length && classification) {
+    baseParams.delete('classificationName')
+    const retry: TicketmasterEvent[] = []
+    for (let page = 0; page < 3; page++) {
+      const { events, totalPages: tp } = await fetchTicketmasterPage(baseParams, page)
+      totalPages = tp
+      retry.push(...events)
+      if (events.length < Number(options.size || 50) || page + 1 >= totalPages) break
+    }
+    raw = dedupeById(filterFutureRawEvents(retry))
+  }
+
+  return raw.map(formatEvent)
 }
 
 // Search for a specific event by keyword (used by EdgeCalculator, Radar, etc.)
