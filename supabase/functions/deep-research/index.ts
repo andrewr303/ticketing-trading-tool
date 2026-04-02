@@ -118,12 +118,7 @@ interface TmEvent {
   sales?: { public?: { startDateTime?: string }; presales?: Array<{ name?: string; startDateTime?: string }> }
 }
 
-async function fetchTicketmaster(
-  apiKey: string,
-  categories: string[],
-  regions: string[],
-  dateRange: string,
-): Promise<string> {
+function tmDateWindow(dateRange: string): { start: string; end: string } {
   const now = new Date()
   const start = now.toISOString().replace(/\.\d+Z$/, "Z")
   const end = new Date(now)
@@ -134,6 +129,16 @@ async function fetchTicketmaster(
     case "next_3_months": end.setMonth(now.getMonth() + 3); break
     default: end.setDate(now.getDate() + 14)
   }
+  return { start, end: end.toISOString().replace(/\.\d+Z$/, "Z") }
+}
+
+async function fetchTicketmasterOnce(
+  apiKey: string,
+  categories: string[],
+  regions: string[],
+  dateRange: string,
+): Promise<{ text: string; count: number }> {
+  const { start, end } = tmDateWindow(dateRange)
 
   const catMap: Record<string, string> = { concert: "music", sports: "sports", theater: "arts & theatre" }
   const classificationName = categories.length
@@ -147,9 +152,9 @@ async function fetchTicketmaster(
   const params = new URLSearchParams({
     apikey: apiKey,
     startDateTime: start,
-    endDateTime: end.toISOString().replace(/\.\d+Z$/, "Z"),
+    endDateTime: end,
     size: "50",
-    sort: "relevance,desc",
+    sort: "date,asc",
     countryCode: "US",
   })
   if (classificationName) params.set("classificationName", classificationName)
@@ -157,12 +162,12 @@ async function fetchTicketmaster(
 
   try {
     const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`)
-    if (!res.ok) return "(Ticketmaster API unavailable)"
+    if (!res.ok) return { text: "(Ticketmaster API unavailable)", count: 0 }
     const data = await res.json()
     const events: TmEvent[] = data._embedded?.events || []
-    if (!events.length) return "(No Ticketmaster events found for this query)"
+    if (!events.length) return { text: "(No Ticketmaster events found for this query)", count: 0 }
 
-    return events.map((ev, i) => {
+    const text = events.map((ev, i) => {
       const venue = ev._embedded?.venues?.[0]
       const price = ev.priceRanges?.[0]
       const cls = ev.classifications?.[0]
@@ -181,9 +186,28 @@ async function fetchTicketmaster(
       if (ev.url) lines.push(`    URL: ${ev.url}`)
       return lines.join("\n")
     }).join("\n\n")
+    return { text, count: events.length }
   } catch {
-    return "(Ticketmaster API error)"
+    return { text: "(Ticketmaster API error)", count: 0 }
   }
+}
+
+async function fetchTicketmaster(
+  apiKey: string,
+  categories: string[],
+  regions: string[],
+  dateRange: string,
+): Promise<string> {
+  let { text, count } = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange)
+  if (count === 0 && dateRange !== "next_3_months") {
+    const wider = await fetchTicketmasterOnce(apiKey, categories, regions, "next_3_months")
+    if (wider.count > 0) {
+      text = `${wider.text}\n\n(Note: widened date window to next 3 months because the selected range returned no events.)`
+    } else {
+      text = wider.text
+    }
+  }
+  return text
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +416,7 @@ Return ONLY valid JSON. No markdown fences, no preamble.
 - No confidence above 95, no STRONG_BUY below 80 confidence
 - ROI formula: ((sale_price * 0.85) - buy_price) / buy_price * 100
 - If data is insufficient for an event, lower confidence and note uncertainty
+- **Ticketmaster resilience:** If the Ticketmaster section is empty, says "unavailable", "skipped", or "No Ticketmaster events", you MUST still populate discovered_events using Web Search Results and Deep Research Synthesis. Set confidence ≤ 60 for events not anchored to Ticketmaster rows, and explain the data gap in market_overview. Every risk_alerts entry MUST include a non-empty defensive_action (e.g. verify feeds, widen date range, or pause sizing).
 
 Generate the report now.`
 }
@@ -434,7 +459,7 @@ Deno.serve(async (req) => {
   } = await req.json()
 
   const youApiKey = Deno.env.get("YOU_API_KEY")
-  const tmApiKey = Deno.env.get("TICKETMASTER_API_KEY") || "GVdlsX9jXKxl3aTFYMQPYaNjItOjnpHG"
+  const tmApiKey = Deno.env.get("TICKETMASTER_API_KEY") ?? ""
 
   if (!youApiKey && !tmApiKey) {
     return new Response(JSON.stringify({ error: "No search APIs configured (need YOU_API_KEY or TICKETMASTER_API_KEY)" }), {
@@ -453,7 +478,9 @@ Deno.serve(async (req) => {
     youApiKey
       ? youSearch(searchQueries, youApiKey)
       : Promise.resolve("(Web search unavailable — YOU_API_KEY not configured)"),
-    fetchTicketmaster(tmApiKey, categories, regions, dateRange),
+    tmApiKey
+      ? fetchTicketmaster(tmApiKey, categories, regions, dateRange)
+      : Promise.resolve("(Ticketmaster skipped — TICKETMASTER_API_KEY not set in project secrets)"),
     youApiKey
       ? youResearch(
           `Live event ticket trading opportunities ${regions.includes("nationwide") ? "nationwide US" : regions.join(", ")}: which concerts, sports events, and shows have the highest resale potential in the next few weeks? Include pricing data from StubHub, Ticketmaster, SeatGeek, and Vivid Seats. What events are trending, selling out, or going on sale soon?`,
@@ -480,12 +507,21 @@ Deno.serve(async (req) => {
     })
   }
 
+  const webSearchHits =
+    searchData.length > 120 &&
+    !searchData.startsWith("(Web search unavailable") &&
+    !searchData.startsWith("(No search results")
+      ? 1
+      : 0
+  const tmHits = !ticketmasterData.startsWith("(") && /\[[0-9]+\]/.test(ticketmasterData)
+  const total_sources = research.sources.length + (tmHits ? 1 : 0) + webSearchHits
+
   const response = {
     result,
     metadata: {
       search_queries_run: searchQueries.length,
       research_effort: effortLevel,
-      total_sources: research.sources.length,
+      total_sources,
       generation_time_ms: Date.now() - startTime,
     },
   }
