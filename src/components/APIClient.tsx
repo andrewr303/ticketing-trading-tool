@@ -173,6 +173,8 @@ export interface DeepResearchResponse {
     total_sources: number
     generation_time_ms: number
     ticketmaster_events_fetched?: number
+    ticketmaster_raw_total?: number | null
+    ticketmaster_http_status?: number | null
   }
 }
 

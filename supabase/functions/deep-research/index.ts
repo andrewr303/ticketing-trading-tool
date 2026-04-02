@@ -106,9 +106,9 @@ async function callOpenRouter(prompt: string, maxTokens: number): Promise<string
 // ---------------------------------------------------------------------------
 interface TmEvent {
   name: string
-  id: string
+  id?: string
   url?: string
-  dates?: { start?: { localDate?: string; localTime?: string }; status?: { code?: string }; timezone?: string }
+  dates?: { start?: { localDate?: string; localTime?: string; dateTime?: string }; status?: { code?: string }; timezone?: string }
   priceRanges?: Array<{ min?: number; max?: number }>
   _embedded?: {
     venues?: Array<{ name?: string; city?: { name?: string }; state?: { stateCode?: string } }>
@@ -120,7 +120,7 @@ interface TmEvent {
 
 function tmDateWindow(dateRange: string): { start: string; end: string } {
   const now = new Date()
-  const start = now.toISOString().replace(/\.\d+Z$/, "Z")
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
   const end = new Date(now)
   switch (dateRange) {
     case "this_week": end.setDate(now.getDate() + 7); break
@@ -129,28 +129,53 @@ function tmDateWindow(dateRange: string): { start: string; end: string } {
     case "next_3_months": end.setMonth(now.getMonth() + 3); break
     default: end.setDate(now.getDate() + 14)
   }
-  return { start, end: end.toISOString().replace(/\.\d+Z$/, "Z") }
+  const endDay = new Date(end)
+  endDay.setUTCHours(23, 59, 59, 999)
+  return {
+    start: start.toISOString().replace(/\.\d+Z$/, "Z"),
+    end: endDay.toISOString().replace(/\.\d+Z$/, "Z"),
+  }
 }
 
-/** YYYY-MM-DD (UTC calendar) for comparing to Ticketmaster localDate strings. */
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10)
+/** YYYY-MM-DD in America/New_York — matches Ticketmaster venue localDate semantics for US events. */
+function usEasternDateYmd(d = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d)
 }
 
 function filterFutureTmEvents(events: TmEvent[]): TmEvent[] {
-  const t = todayIsoDate()
+  const ymdCutoff = usEasternDateYmd()
+  const slackMs = 3600000
+  const nowMs = Date.now()
   return events.filter((ev) => {
+    const dt = ev.dates?.start?.dateTime
+    if (dt) {
+      const t = new Date(dt).getTime()
+      if (!Number.isNaN(t)) return t >= nowMs - slackMs
+    }
     const d = ev.dates?.start?.localDate
     if (!d) return true
-    return d >= t
+    return d >= ymdCutoff
   })
+}
+
+function tmDedupeKey(e: TmEvent): string {
+  const id = e.id?.trim()
+  if (id) return id
+  const v = e._embedded?.venues?.[0]
+  return `${e.name}|${e.dates?.start?.localDate ?? ""}|${e.dates?.start?.dateTime ?? ""}|${v?.name ?? ""}`
 }
 
 function dedupeTmEvents(events: TmEvent[]): TmEvent[] {
   const seen = new Set<string>()
   return events.filter((e) => {
-    if (!e.id || seen.has(e.id)) return false
-    seen.add(e.id)
+    const key = tmDedupeKey(e)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
     return true
   })
 }
@@ -168,8 +193,8 @@ async function fetchTicketmasterOnce(
   categories: string[],
   regions: string[],
   dateRange: string,
-  opts: { classificationName?: string; skipClassification?: boolean } = {},
-): Promise<{ text: string; count: number; httpStatus?: number; errorHint?: string }> {
+  opts: { classificationName?: string; skipClassification?: boolean; sort?: string } = {},
+): Promise<{ text: string; count: number; httpStatus?: number; errorHint?: string; rawBeforeFilter?: number }> {
   const { start, end } = tmDateWindow(dateRange)
 
   const classificationName = opts.skipClassification
@@ -180,12 +205,13 @@ async function fetchTicketmasterOnce(
   const nonNational = regions.filter(r => r !== "nationwide")
   const stateCode = nonNational.length ? regionMap[nonNational[0].toLowerCase()] : undefined
 
+  const sort = opts.sort ?? "date,asc"
   const baseParams: Record<string, string> = {
     apikey: apiKey,
     startDateTime: start,
     endDateTime: end,
     size: "50",
-    sort: "date,asc",
+    sort,
     countryCode: "US",
   }
 
@@ -201,7 +227,7 @@ async function fetchTicketmasterOnce(
       res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      return { text: `(Ticketmaster network error: ${msg})`, count: 0, errorHint: msg }
+      return { text: `(Ticketmaster network error: ${msg})`, count: 0, errorHint: msg, rawBeforeFilter: 0 }
     }
 
     if (!res.ok) {
@@ -217,6 +243,7 @@ async function fetchTicketmasterOnce(
         count: 0,
         httpStatus: res.status,
         errorHint: hint,
+        rawBeforeFilter: 0,
       }
     }
 
@@ -229,7 +256,11 @@ async function fetchTicketmasterOnce(
 
   const future = dedupeTmEvents(filterFutureTmEvents(allEvents))
   if (!future.length) {
-    return { text: "(No Ticketmaster events in this date window after filtering to future dates)", count: 0 }
+    return {
+      text: "(No Ticketmaster events in this date window after filtering to future dates)",
+      count: 0,
+      rawBeforeFilter: allEvents.length,
+    }
   }
 
   const text = future.map((ev, i) => {
@@ -251,7 +282,7 @@ async function fetchTicketmasterOnce(
     if (ev.url) lines.push(`    URL: ${ev.url}`)
     return lines.join("\n")
   }).join("\n\n")
-  return { text, count: future.length }
+  return { text, count: future.length, rawBeforeFilter: allEvents.length }
 }
 
 async function fetchTicketmaster(
@@ -259,8 +290,13 @@ async function fetchTicketmaster(
   categories: string[],
   regions: string[],
   dateRange: string,
-): Promise<{ text: string; count: number }> {
+): Promise<{ text: string; count: number; rawBeforeFilter?: number; httpStatus?: number }> {
   let r = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange, {})
+
+  if (r.count === 0 && (r.rawBeforeFilter ?? 0) === 0 && r.httpStatus === undefined) {
+    const alt = await fetchTicketmasterOnce(apiKey, categories, regions, dateRange, { sort: "relevance,desc" })
+    if (alt.count > 0) r = alt
+  }
 
   const hadClassification = Boolean(singleClassificationName(categories))
   if (r.count === 0 && hadClassification) {
@@ -269,6 +305,7 @@ async function fetchTicketmaster(
       return {
         text: `${noCls.text}\n\n(Note: returned unfiltered categories — TM had no rows for the selected genre filter.)`,
         count: noCls.count,
+        rawBeforeFilter: noCls.rawBeforeFilter,
       }
     }
     r = noCls
@@ -282,12 +319,13 @@ async function fetchTicketmaster(
       return {
         text: `${wider.text}\n\n(Note: widened date window to next 3 months because the selected range returned no events.)`,
         count: wider.count,
+        rawBeforeFilter: wider.rawBeforeFilter,
       }
     }
-    return { text: wider.text, count: wider.count }
+    return { text: wider.text, count: wider.count, rawBeforeFilter: wider.rawBeforeFilter, httpStatus: wider.httpStatus }
   }
 
-  return { text: r.text, count: r.count }
+  return { text: r.text, count: r.count, rawBeforeFilter: r.rawBeforeFilter, httpStatus: r.httpStatus }
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +646,7 @@ Deno.serve(async (req) => {
       : Promise.resolve("(Web search unavailable — YOU_API_KEY not configured)"),
     tmApiKey
       ? fetchTicketmaster(tmApiKey, categories, regions, dateRange)
-      : Promise.resolve({ text: "(Ticketmaster skipped — TICKETMASTER_API_KEY not set in project secrets)", count: 0 }),
+      : Promise.resolve({ text: "(Ticketmaster skipped — TICKETMASTER_API_KEY not set in project secrets)", count: 0, rawBeforeFilter: 0 }),
     youApiKey
       ? youResearch(
           `As of ${today}, focus on ${year} and future dates only. Live event ticket trading opportunities ${regions.includes("nationwide") ? "nationwide US" : regions.join(", ")}: which concerts, sports, and shows have resale potential in the next few weeks? Ignore any event before ${today}. Cite only current or upcoming events. Include StubHub, Ticketmaster, SeatGeek, Vivid Seats where relevant.`,
@@ -656,6 +694,8 @@ Deno.serve(async (req) => {
       research_effort: effortLevel,
       total_sources,
       ticketmaster_events_fetched: tmEventCount,
+      ticketmaster_raw_total: tmPack.rawBeforeFilter ?? null,
+      ticketmaster_http_status: tmPack.httpStatus ?? null,
       generation_time_ms: Date.now() - startTime,
     },
   }

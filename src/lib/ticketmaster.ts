@@ -5,7 +5,7 @@ const TM_BASE = 'https://app.ticketmaster.com/discovery/v2'
 
 interface TicketmasterEvent {
   name: string
-  id: string
+  id?: string
   url?: string
   dates?: {
     start?: { localDate?: string; localTime?: string; dateTime?: string }
@@ -56,6 +56,13 @@ function mapCategory(segment?: string): string {
   return 'other'
 }
 
+function tmStableKey(e: TicketmasterEvent): string {
+  const id = e.id?.trim()
+  if (id) return id
+  const v = e._embedded?.venues?.[0]
+  return `${e.name}|${e.dates?.start?.localDate ?? ''}|${e.dates?.start?.dateTime ?? ''}|${v?.name ?? ''}`
+}
+
 function formatEvent(ev: TicketmasterEvent): FormattedEvent {
   const venue = ev._embedded?.venues?.[0]
   const classification = ev.classifications?.[0]
@@ -77,14 +84,14 @@ function formatEvent(ev: TicketmasterEvent): FormattedEvent {
     url: ev.url || '',
     saleStatus: ev.dates?.status?.code || '',
     presales,
-    ticketmasterId: ev.id,
+    ticketmasterId: tmStableKey(ev),
   }
 }
 
-// Date range helpers
+// Date range helpers (align with edge: UTC day start → inclusive end-of-day)
 function getDateRange(range: string): { start: string; end: string } {
   const now = new Date()
-  const start = now.toISOString().replace(/\.\d+Z$/, 'Z')
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
   const end = new Date(now)
 
   switch (range) {
@@ -104,7 +111,21 @@ function getDateRange(range: string): { start: string; end: string } {
       end.setDate(now.getDate() + 14)
   }
 
-  return { start, end: end.toISOString().replace(/\.\d+Z$/, 'Z') }
+  const endDay = new Date(end)
+  endDay.setUTCHours(23, 59, 59, 999)
+  return {
+    start: start.toISOString().replace(/\.\d+Z$/, 'Z'),
+    end: endDay.toISOString().replace(/\.\d+Z$/, 'Z'),
+  }
+}
+
+function usEasternDateYmd(d = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 /** TM Discovery API expects a single classificationName; comma-lists often fail or return empty. */
@@ -120,24 +141,28 @@ function singleClassificationName(categories?: string[]): string | undefined {
   return map[categories[0].toLowerCase()] || undefined
 }
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function filterFutureRawEvents(events: TicketmasterEvent[]): TicketmasterEvent[] {
-  const t = todayIsoDate()
+  const ymdCutoff = usEasternDateYmd()
+  const slackMs = 3600000
+  const nowMs = Date.now()
   return events.filter((ev) => {
+    const dt = ev.dates?.start?.dateTime
+    if (dt) {
+      const t = new Date(dt).getTime()
+      if (!Number.isNaN(t)) return t >= nowMs - slackMs
+    }
     const d = ev.dates?.start?.localDate
     if (!d) return true
-    return d >= t
+    return d >= ymdCutoff
   })
 }
 
 function dedupeById(events: TicketmasterEvent[]): TicketmasterEvent[] {
   const seen = new Set<string>()
   return events.filter((e) => {
-    if (!e.id || seen.has(e.id)) return false
-    seen.add(e.id)
+    const key = tmStableKey(e)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
     return true
   })
 }
@@ -224,6 +249,17 @@ export async function searchTicketmaster(options: SearchOptions = {}): Promise<F
   }
 
   let raw = dedupeById(filterFutureRawEvents(merged))
+
+  if (!merged.length) {
+    baseParams.set('sort', 'relevance,desc')
+    for (let page = 0; page < 3; page++) {
+      const { events, totalPages: tp } = await fetchTicketmasterPage(baseParams, page)
+      totalPages = tp
+      merged.push(...events)
+      if (events.length < Number(options.size || 50) || page + 1 >= totalPages) break
+    }
+    raw = dedupeById(filterFutureRawEvents(merged))
+  }
 
   if (!raw.length && classification) {
     baseParams.delete('classificationName')
