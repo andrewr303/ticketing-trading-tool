@@ -757,7 +757,7 @@ export default function OpenBell() {
                         <td className="py-2.5 px-3 text-right" style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{event.demand_score}</td>
                         <td className="py-2.5 px-3 text-right" style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{event.supply_score}</td>
                         <td className="py-2.5 px-3 text-right" style={{ fontFamily: "monospace", color: "var(--text-secondary)" }}>{event.roi_score}</td>
-                        <td className="py-2.5 px-3 text-right"><ConfidenceBar value={event.confidence} /></td>
+                        <td className="py-2.5 px-3 text-right"><ConfidenceBar value={event.confidence ?? 50} /></td>
                         <td className="py-2.5 px-3 text-right" style={{ fontFamily: "monospace", fontWeight: 700, color: event.estimated_roi_pct >= 0 ? "#6ee7b7" : "#fca5a5" }}>
                           {event.estimated_roi_pct > 0 ? "+" : ""}{event.estimated_roi_pct}%
                         </td>
@@ -792,11 +792,11 @@ export default function OpenBell() {
                                 ))}
                               </div>
                             </div>
-                            {event.source_citations.length > 0 && research.sources && (
+                            {(event.source_citations?.length ?? 0) > 0 && research.sources && (
                               <div className="mt-3">
                                 <div style={{ ...labelStyle, marginBottom: 6 }}>Sources</div>
                                 <div className="flex flex-wrap gap-2">
-                                  {event.source_citations.map(idx => {
+                                  {(event.source_citations ?? []).map(idx => {
                                     const src = research.sources[idx - 1];
                                     if (!src) return null;
                                     return (

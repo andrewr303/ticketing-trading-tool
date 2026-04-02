@@ -1,7 +1,8 @@
 import type { ModelTier } from '../lib/prompts'
-import type { EventSearchResult, DeepResearchRequest, DeepResearchResult } from '../lib/types'
+import type { EventSearchResult, DeepResearchRequest, DeepResearchResult, DiscoveredEvent, RiskAlert, SignalDashboard, Citation } from '../lib/types'
 import { searchTicketmaster, searchTicketmasterByKeyword, formatTicketmasterForPrompt } from '../lib/ticketmaster'
 import type { SearchOptions } from '../lib/ticketmaster'
+import { supabase } from '../lib/supabase'
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-3-flash-preview";
@@ -173,24 +174,122 @@ export interface DeepResearchResponse {
   }
 }
 
+/** Normalize LLM JSON so UI types match (edge vs client prompts differ; models drift). */
+function normalizeDeepResearchResult(parsed: Record<string, unknown>): DeepResearchResult {
+  const rawEvents = Array.isArray(parsed.discovered_events) ? parsed.discovered_events : []
+  const discovered_events: DiscoveredEvent[] = rawEvents.map((ev: Record<string, unknown>) => ({
+    event_name: String(ev.event_name ?? ''),
+    artist_or_team: String(ev.artist_or_team ?? ''),
+    event_date: String(ev.event_date ?? ''),
+    venue: String(ev.venue ?? ''),
+    city: String(ev.city ?? ''),
+    state: String(ev.state ?? ''),
+    category: (['concert', 'sports', 'theater', 'comedy', 'festival'].includes(String(ev.category))
+      ? ev.category
+      : 'concert') as DiscoveredEvent['category'],
+    edge_score: Number(ev.edge_score) || 0,
+    demand_score: Number(ev.demand_score) || 0,
+    supply_score: Number(ev.supply_score) || 0,
+    roi_score: Number(ev.roi_score) || 0,
+    timing_score: Number(ev.timing_score) || 0,
+    inefficiency_score: Number(ev.inefficiency_score) || 0,
+    face_value_range: ev.face_value_range != null ? String(ev.face_value_range) : null,
+    secondary_floor: ev.secondary_floor != null ? Number(ev.secondary_floor) : null,
+    secondary_median: ev.secondary_median != null ? Number(ev.secondary_median) : null,
+    inventory_level: (['scarce', 'tight', 'moderate', 'abundant'].includes(String(ev.inventory_level))
+      ? ev.inventory_level
+      : 'moderate') as DiscoveredEvent['inventory_level'],
+    sell_through_pct: ev.sell_through_pct != null ? Number(ev.sell_through_pct) : null,
+    price_velocity: (['surging', 'rising', 'stable', 'declining', 'crashing'].includes(String(ev.price_velocity))
+      ? ev.price_velocity
+      : 'stable') as DiscoveredEvent['price_velocity'],
+    action: (['BUY', 'SELL', 'HOLD', 'WATCH'].includes(String(ev.action)) ? ev.action : 'WATCH') as DiscoveredEvent['action'],
+    confidence: typeof ev.confidence === 'number' ? ev.confidence : 50,
+    estimated_roi_pct: typeof ev.estimated_roi_pct === 'number' ? ev.estimated_roi_pct : 0,
+    reasoning: String(ev.reasoning ?? ''),
+    source_citations: Array.isArray(ev.source_citations)
+      ? (ev.source_citations as unknown[]).map(n => Number(n)).filter(n => !Number.isNaN(n))
+      : [],
+  }))
+
+  const rawAlerts = Array.isArray(parsed.risk_alerts) ? parsed.risk_alerts : []
+  const risk_alerts: RiskAlert[] = rawAlerts.map((a: Record<string, unknown>) => {
+    const detail = String(a.detail ?? a.description ?? '')
+    const defensive = String(a.defensive_action ?? '')
+    return {
+      severity: (['critical', 'warning', 'info'].includes(String(a.severity)) ? a.severity : 'info') as RiskAlert['severity'],
+      title: String(a.title ?? 'Alert'),
+      detail,
+      affected_events: Array.isArray(a.affected_events) ? (a.affected_events as string[]) : [],
+      defensive_action: defensive || (detail ? 'Review the detail above and adjust positions or data checks accordingly.' : 'Verify API keys (Ticketmaster, OpenRouter) and retry; avoid sizing trades on empty data.'),
+    }
+  })
+
+  const sd = (parsed.signal_dashboard || {}) as Record<string, unknown>
+  const signal_dashboard: SignalDashboard = {
+    social: Array.isArray(sd.social) ? sd.social as SignalDashboard['social'] : [],
+    streaming: Array.isArray(sd.streaming) ? sd.streaming as SignalDashboard['streaming'] : [],
+    search_trends: Array.isArray(sd.search_trends)
+      ? sd.search_trends as SignalDashboard['search_trends']
+      : Array.isArray(sd.search)
+        ? sd.search as SignalDashboard['search_trends']
+        : [],
+    news: Array.isArray(sd.news) ? sd.news as SignalDashboard['news'] : [],
+    market: Array.isArray(sd.market) ? sd.market as SignalDashboard['market'] : [],
+  }
+
+  const rawSources = Array.isArray(parsed.sources) ? parsed.sources : []
+  const sources: Citation[] = rawSources.map((s: Record<string, unknown>, i: number) => ({
+    index: typeof s.index === 'number' ? s.index : i + 1,
+    title: String(s.title ?? ''),
+    url: String(s.url ?? ''),
+    snippet: String(s.snippet ?? ''),
+  }))
+
+  return {
+    generated_at: String(parsed.generated_at ?? new Date().toISOString()),
+    market_overview: String(parsed.market_overview ?? ''),
+    discovered_events,
+    signal_dashboard,
+    on_sales: Array.isArray(parsed.on_sales) ? parsed.on_sales as DeepResearchResult['on_sales'] : [],
+    risk_alerts,
+    sources,
+    recommended_focus: String(parsed.recommended_focus ?? ''),
+  }
+}
+
 export async function callDeepResearch(options: DeepResearchRequest): Promise<DeepResearchResponse> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
   const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-  // Try Supabase edge function first (has YOU.com web search + OpenRouter)
+  // Edge function uses supabase.auth.getUser() — must send the user's access token, not only the anon key.
+  const { data: { session } } = await supabase.auth.getSession()
+  const accessToken = session?.access_token
+
   if (supabaseUrl && supabaseKey) {
     try {
       const res = await fetch(`${supabaseUrl}/functions/v1/deep-research`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
+          'Authorization': `Bearer ${accessToken ?? supabaseKey}`,
+          'apikey': supabaseKey,
         },
         body: JSON.stringify(options),
       })
       if (res.ok) {
-        const data = await res.json()
-        if (!data.error) return data
+        const data = await res.json() as { error?: string; result?: Record<string, unknown>; metadata?: DeepResearchResponse['metadata'] }
+        if (!data.error && data.result) {
+          return {
+            result: normalizeDeepResearchResult(data.result),
+            metadata: data.metadata ?? {
+              search_queries_run: 0,
+              research_effort: options.effortLevel || 'standard',
+              total_sources: 0,
+              generation_time_ms: 0,
+            },
+          }
+        }
       }
     } catch {
       // Fall through to frontend approach
@@ -203,48 +302,65 @@ export async function callDeepResearch(options: DeepResearchRequest): Promise<De
   const categories = options.categories?.length ? options.categories.join(', ') : 'all categories'
   const dateRange = options.dateRange || 'next_2_weeks'
 
-  // Fetch real Ticketmaster data
-  const tmEvents = await searchTicketmaster({
+  const tmEventsPrimary = await searchTicketmaster({
     categories: options.categories,
     regions: options.regions,
     dateRange,
     size: 50,
   })
+  let tmEvents = tmEventsPrimary
+  if (!tmEvents.length && dateRange !== 'next_3_months') {
+    tmEvents = await searchTicketmaster({
+      categories: options.categories,
+      regions: options.regions,
+      dateRange: 'next_3_months',
+      size: 50,
+    })
+  }
   const tmText = formatTicketmasterForPrompt(tmEvents)
+  const tmHasRows = tmEvents.length > 0
 
   const prompt = `You are a ticket market research analyst. Research upcoming live events for the ${regions} market, focusing on ${categories} in the ${dateRange.replace(/_/g, ' ')} timeframe. Effort level: ${options.effortLevel || 'standard'}.
 
 ## LIVE EVENT DATA FROM TICKETMASTER
 
-${tmText || '(No Ticketmaster data available for this query)'}
+${tmText || '(No Ticketmaster rows returned for this query — API key missing, rate-limited, or no events in window.)'}
 
 ## Instructions
 
-Using the live Ticketmaster data above as your PRIMARY source, generate a research report. Only include events that appear in the data above. Do not invent events.
+${tmHasRows
+    ? `Use the Ticketmaster block above as the anchor for event names, dates, and venues. You may infer resale dynamics and scores from general market patterns, but do not invent events that contradict the Ticketmaster list.`
+    : `Ticketmaster data is missing or empty. Still produce a useful report: synthesize 8–15 plausible upcoming opportunities for this market and timeframe using public knowledge of major tours, sports seasons, and theater runs. Clearly mark lower confidence (≤55) and state in market_overview that primary feed was unavailable.`}
 
 Return a JSON object matching this structure exactly:
 {
   "generated_at": "ISO timestamp",
   "market_overview": "string",
-  "discovered_events": [{ "event_name": "", "artist_or_team": "", "event_date": "", "venue": "", "city": "", "state": "", "category": "", "edge_score": 0, "demand_score": 0, "supply_score": 0, "roi_score": 0, "timing_score": 0, "inefficiency_score": 0, "face_value_range": "", "secondary_floor": 0, "secondary_median": 0, "inventory_level": "moderate", "sell_through_pct": 0, "price_velocity": "stable", "action": "WATCH", "reasoning": "", "key_signals": [], "risk_factors": [] }],
-  "signal_dashboard": { "social": [], "streaming": [], "search": [], "news": [] },
-  "on_sales": [{ "event_name": "", "date": "", "time": "", "platform": "", "profit_potential": "medium", "notes": "" }],
-  "risk_alerts": [{ "severity": "medium", "title": "", "description": "", "affected_events": [] }],
-  "sources": [{ "title": "", "url": "", "snippet": "" }],
+  "discovered_events": [{ "event_name": "", "artist_or_team": "", "event_date": "", "venue": "", "city": "", "state": "", "category": "concert|sports|theater|comedy|festival", "edge_score": 0, "demand_score": 0, "supply_score": 0, "roi_score": 0, "timing_score": 0, "inefficiency_score": 0, "face_value_range": "", "secondary_floor": 0, "secondary_median": 0, "inventory_level": "moderate", "sell_through_pct": null, "price_velocity": "stable", "action": "WATCH", "confidence": 50, "estimated_roi_pct": 0, "reasoning": "", "source_citations": [] }],
+  "signal_dashboard": { "social": [], "streaming": [], "search_trends": [], "news": [], "market": [] },
+  "on_sales": [{ "event_name": "", "date": "", "time": "", "timezone": "ET", "platform": "", "sale_type": "general", "profit_potential": "medium", "notes": "", "region": "" }],
+  "risk_alerts": [{ "severity": "warning", "title": "", "detail": "", "affected_events": [], "defensive_action": "" }],
+  "sources": [{ "index": 1, "title": "", "url": "", "snippet": "" }],
   "recommended_focus": ""
 }
 
 Return only the JSON, no other text.`
 
   const raw = await callLLM({ prompt, modelTier: 'advanced', maxTokens: 8000 })
-  const result: DeepResearchResult = JSON.parse(raw)
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    throw new Error('Deep research returned invalid JSON. Check OpenRouter model output.')
+  }
+  const result = normalizeDeepResearchResult(parsed)
 
   return {
     result,
     metadata: {
       search_queries_run: 1,
       research_effort: options.effortLevel || 'standard',
-      total_sources: result.sources?.length || 0,
+      total_sources: Math.max(result.sources.length, tmHasRows ? 1 : 0),
       generation_time_ms: Date.now() - startTime,
     },
   }
